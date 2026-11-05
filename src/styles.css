@@ -382,3 +382,9 @@ h1 + .hint { margin-left: 2px; }
 .sort-btn.on { color: var(--charcoal); }
 .sort-ico { flex: 0 0 auto; color: var(--muted); }
 .sort-btn.on .sort-ico { color: var(--blue); }
+.filter.search { min-width: 220px; }
+.filter.search input { cursor: text; }
+.filter.search input::placeholder { color: var(--muted-2); font-weight: 500; }
+.filter.toggle { cursor: pointer; }
+.filter.toggle input { width: 14px; height: 14px; margin: 0; accent-color: var(--charcoal); }
+.panel-h .filterbar { box-shadow: none; }
