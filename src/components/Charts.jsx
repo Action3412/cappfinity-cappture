@@ -40,7 +40,7 @@ export function WeeklyColumns({ data, target }) {
           </linearGradient>
         </defs>
         {ticks.map((tv) => <g key={tv}><line x1={padL} x2={W - padR} y1={y(tv)} y2={y(tv)} stroke="rgba(255,255,255,.1)" strokeDasharray={tv ? '2 4' : undefined} /><text x={padL - 8} y={y(tv) + 3.5} textAnchor="end" fontSize="10" fill="rgba(255,255,255,.55)">{tv % 1 ? tv.toFixed(1) : tv}</text></g>)}
-        {target > 0 && target <= max && <g><line x1={padL} x2={W - padR} y1={y(target)} y2={y(target)} stroke="#FDB601" strokeOpacity=".9" strokeDasharray="5 4" /><text x={W - padR} y={y(target) - 6} textAnchor="end" fontSize="10" fontWeight="700" fill="#FDB601">target {target}h</text></g>)}
+        {target > 0 && target <= max && <g><line x1={padL} x2={W - padR} y1={y(target)} y2={y(target)} stroke="#FDB601" strokeOpacity=".9" strokeDasharray="5 4" /><text x={W - padR} y={y(target) - 6} textAnchor="end" fontSize="10" fontWeight="700" fill="#FDB601">target {target}h</text></g>}
         {data.map((d, i) => {
           const x = padL + i * slot + (slot - bw) / 2
           const yb = y(d.billable), yi = y(d.billable + d.internal), tot = d.billable + d.internal
