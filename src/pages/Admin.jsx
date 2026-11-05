@@ -181,7 +181,7 @@ function Projects() {
                 return (
                   <tr key={p.id} className="click" style={{ opacity: p.status === 'archived' ? .55 : 1 }} onClick={() => setEditing(p)} title="Click to edit">
                     <td><div className="row"><span className="swatch" style={{ background: p.colour || p.client?.colour }} /><b>{p.client?.name}</b></div></td>
-                    <td>{p.name}{!p.billable && <span className="tag grey" style={{ marginLeft: 8 }}>non-billable</span>}</td>
+                    <td>{p.name}{!p.billable && <span className="tag grey" style={{ marginLeft: 8 }}>non-billable</span>}{p.counts_toward_target === false && <span className="tag grey" style={{ marginLeft: 6 }} title="Logged but doesn't count towards the 37.5h week">not counted</span>}</td>
                     <td className="small muted">{p.code}</td>
                     <td className="num" onClick={(e) => e.stopPropagation()}><input className="input" type="number" min="0" step="0.5" defaultValue={p.budget_hours} onBlur={(e) => Number(e.target.value) !== Number(p.budget_hours) && updateBudget(p, e.target.value)} style={{ width: 84, height: 32, textAlign: 'right' }} aria-label="Budget hours" /></td>
                     <td className="num">{al.length ? `${al.length} ${al.length === 1 ? 'person' : 'people'}${al.some((x) => x.hours) ? ` · ${al.reduce((a, x) => a + (Number(x.hours) || 0), 0)}h` : ''}` : <span className="muted">nobody yet</span>}</td>
@@ -208,12 +208,12 @@ function Projects() {
 }
 
 function EditProjectModal({ project, clients, onSave, onClose }) {
-  const [f, setF] = useState({ clientName: project.client?.name || '', name: project.name, code: project.code, budget_hours: project.budget_hours, billable: project.billable, colour: project.colour || '' })
+  const [f, setF] = useState({ clientName: project.client?.name || '', name: project.name, code: project.code, budget_hours: project.budget_hours, billable: project.billable, counts_toward_target: project.counts_toward_target !== false, colour: project.colour || '' })
   const [busy, setBusy] = useState(false)
   useEffect(() => { const k = (e) => e.key === 'Escape' && onClose(); document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k) }, [onClose])
   async function submit(e) {
     e.preventDefault(); setBusy(true)
-    const ok = await onSave({ clientName: f.clientName, name: f.name.trim(), code: f.code.trim().toUpperCase(), budget_hours: Number(f.budget_hours) || 0, billable: f.billable, colour: f.colour || null })
+    const ok = await onSave({ clientName: f.clientName, name: f.name.trim(), code: f.code.trim().toUpperCase(), budget_hours: Number(f.budget_hours) || 0, billable: f.billable, counts_toward_target: f.counts_toward_target, colour: f.colour || null })
     setBusy(false); if (ok) onClose()
   }
   return (
@@ -230,6 +230,7 @@ function EditProjectModal({ project, clients, onSave, onClose }) {
             <label className="field">Code<input className="input" value={f.code} onChange={(e) => setF({ ...f, code: e.target.value.toUpperCase() })} required style={{ textTransform: 'uppercase' }} /></label>
             <label className="field">Budget (hours)<input className="input" type="number" min="0" step="0.5" value={f.budget_hours} onChange={(e) => setF({ ...f, budget_hours: e.target.value })} /></label>
             <label className="field">Billable<select className="select" value={f.billable ? 'yes' : 'no'} onChange={(e) => setF({ ...f, billable: e.target.value === 'yes' })}><option value="yes">Billable</option><option value="no">Non-billable</option></select></label>
+            <label className="field">Counts towards the week<select className="select" value={f.counts_toward_target ? 'yes' : 'no'} onChange={(e) => setF({ ...f, counts_toward_target: e.target.value === 'yes' })}><option value="yes">Yes, counts towards 37.5h</option><option value="no">No, logged but not counted</option></select></label>
             <label className="field">Colour on the board
               <div className="row wrap" style={{ gap: 6, paddingTop: 4 }}>
                 <button type="button" className={`pill ${!f.colour ? 'on' : ''}`} onClick={() => setF({ ...f, colour: '' })} title="Use the client's colour">Client's</button>
@@ -237,7 +238,7 @@ function EditProjectModal({ project, clients, onSave, onClose }) {
               </div>
             </label>
           </div>
-          <span className="small muted">Changing the client moves the project under that client; typing a new client name creates it. Changing the code is safe, every hour already logged stays attached.</span>
+          <span className="small muted">"Counts towards the week" is for things like lunch and breaks: people can log them so the day reads right, but they don't count towards the 37.5. Changing the client moves the project under that client; typing a new client name creates it. Changing the code is safe, every hour already logged stays attached.</span>
         </div>
         <div className="row between" style={{ padding: '12px 18px', borderTop: '1px solid var(--line-soft)' }}><button type="button" className="btn" onClick={onClose}>Cancel</button><button type="submit" className="btn primary" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button></div>
       </form>

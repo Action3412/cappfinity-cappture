@@ -1,7 +1,7 @@
 import { supabase } from './supabase.js'
 
 export async function fetchProjects({ includeArchived = false } = {}) {
-  let q = supabase.from('projects').select('id, name, code, colour, budget_hours, billable, status, client:clients(id, name, colour, is_internal)').order('name')
+  let q = supabase.from('projects').select('id, name, code, colour, budget_hours, billable, counts_toward_target, status, client:clients(id, name, colour, is_internal)').order('name')
   if (!includeArchived) q = q.eq('status', 'active')
   const { data, error } = await q
   if (error) throw error
@@ -46,13 +46,20 @@ export async function fetchPendingSuggestions(uid) {
   return data || []
 }
 
+// The database stores whole minutes (hours is derived from it), so anything the app
+// writes as hours is converted here. Everything read back still has hours on it.
+function toRow(row) {
+  const r = { ...row }
+  if ('hours' in r) { r.minutes = Math.max(1, Math.round(Number(r.hours) * 60)); delete r.hours }
+  return r
+}
 export async function insertEntry(row) {
-  const { data, error } = await supabase.from('time_entries').insert(row).select().single()
+  const { data, error } = await supabase.from('time_entries').insert(toRow(row)).select().single()
   if (error) throw error
   return data
 }
 export async function updateEntry(id, patch) {
-  const { data, error } = await supabase.from('time_entries').update(patch).eq('id', id).select().single()
+  const { data, error } = await supabase.from('time_entries').update(toRow(patch)).eq('id', id).select().single()
   if (error) throw error
   return data
 }

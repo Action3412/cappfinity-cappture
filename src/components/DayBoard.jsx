@@ -71,13 +71,14 @@ export function dayRange(entries, dayStart, dayEnd) {
 /* ------------------------------------------------------------------ */
 /* One day column: a clock track. Blocks sit at the time they happened. */
 /* ------------------------------------------------------------------ */
-export function DayColumn({ date, entries, dayHours, dayStart, dayEnd, range, projById, wtById, isToday, isFirst, editingId, onOpen, onResize, onMove }) {
+export function DayColumn({ date, entries, dayHours, dayStart, dayEnd, range, projById, wtById, isToday, isFirst, editingId, locked, onOpen, onResize, onMove }) {
   const t = today()
   const trackRef = useRef(null)
   const [now, setNow] = useState(() => { const d = new Date(); return d.getHours() + d.getMinutes() / 60 })
   useEffect(() => { if (!isToday) return; const i = setInterval(() => { const d = new Date(); setNow(d.getHours() + d.getMinutes() / 60) }, 60000); return () => clearInterval(i) }, [isToday])
 
-  const tot = entries.reduce((a, e) => a + (e.hours || 0), 0)
+  const counts = (e) => projById[e.project_id]?.counts_toward_target !== false
+  const tot = entries.reduce((a, e) => a + (counts(e) ? e.hours || 0 : 0), 0)
   const pct = Math.min(100, Math.round((tot / dayHours) * 100))
   const state = tot >= dayHours ? 'done' : date > t ? (tot > 0 ? 'part' : 'future') : tot > 0 ? 'part' : 'short'
   const left = Math.max(0, dayHours - tot)
@@ -102,7 +103,7 @@ export function DayColumn({ date, entries, dayHours, dayStart, dayEnd, range, pr
         </div>
         <div className="day-head-row">
           {status(state, left) ? <span className={`day-status ${state}`}>{status(state, left)}</span> : <span className="day-status future">{fmtClock(dayStart)} – {fmtClock(dayEnd)}</span>}
-          {isFirst && <Hint size={12} align="left" title="Your day" text={`The column is your working day, ${fmtClock(dayStart)} to ${fmtClock(dayEnd)}, and stretches if you worked outside that. Drop a project at the time you started it, pull either end of the block to set how long, and drag it up or down to move it. Gaps are fine: that's lunch. The number here is hours logged against your ${dayHours}h target.`} />}
+          {isFirst && <Hint size={12} align="left" title="Your day" text={`The column is your working day, ${fmtClock(dayStart)} to ${fmtClock(dayEnd)}, and stretches if you worked outside that. Drop a project at the time you started it, pull either end of the block to set how long, and drag it up or down to move it. Gaps are fine: that's lunch. The number here is hours logged against your ${dayHours}h target. Lunch and breaks can be logged too, they just don't count towards it.`} />}
         </div>
       </header>
 
@@ -116,7 +117,7 @@ export function DayColumn({ date, entries, dayHours, dayStart, dayEnd, range, pr
         {isToday && now >= from && now <= to && <span className="now-line" style={{ top: (now - from) * PX_PER_HOUR }}><i /><em>{fmtClock(Math.floor(now) + Math.round((now % 1) * 60) / 60)}</em></span>}
 
         {entries.map((e) => (
-          <EntryBlock key={e.id} e={e} top={(startOf(e, dayStart) - from) * PX_PER_HOUR} lane={lanes[e.id]} project={projById[e.project_id]} workType={wtById[e.work_type_id]} editing={editingId === e.id}
+          <EntryBlock locked={locked} key={e.id} e={e} top={(startOf(e, dayStart) - from) * PX_PER_HOUR} lane={lanes[e.id]} project={projById[e.project_id]} workType={wtById[e.work_type_id]} editing={editingId === e.id}
             onOpen={onOpen} onResize={onResize} onMove={onMove} />
         ))}
       </div>
@@ -143,7 +144,7 @@ const status = (state, left) => state === 'done' ? 'Day complete' : state === 'p
 /* A block at a clock time. Drag to move (within or between days),     */
 /* pull either end to change the time, click to edit.                  */
 /* ------------------------------------------------------------------ */
-function EntryBlock({ e, top, lane, project, workType, editing, onOpen, onResize, onMove }) {
+function EntryBlock({ e, top, lane, project, workType, editing, locked, onOpen, onResize, onMove }) {
   const ref = useRef(null)
   const [preview, setPreview] = useState(null)   // { start, hours } while resizing
   const [drag, setDrag] = useState(null)         // { x, y, w, copy } while moving
@@ -164,6 +165,7 @@ function EntryBlock({ e, top, lane, project, workType, editing, onOpen, onResize
   function down(ev, mode) {
     if (ev.button !== undefined && ev.button !== 0) return
     ev.stopPropagation(); ev.preventDefault()
+    if (locked) { if (mode === 'move') onOpen(e, ref.current); return }
     const r = ref.current.getBoundingClientRect()
     try { ev.currentTarget.setPointerCapture?.(ev.pointerId) } catch {}
     gesture.current = { mode, startX: ev.clientX, startY: ev.clientY, startH: e.hours, startT: startOf(e), moved: false, target: null, copy: ev.altKey, rect: { x: r.left, y: r.top, w: r.width }, grabY: ev.clientY - r.top }
@@ -238,7 +240,7 @@ function EntryBlock({ e, top, lane, project, workType, editing, onOpen, onResize
 /* ------------------------------------------------------------------ */
 /* Floating editor next to a block.                                    */
 /* ------------------------------------------------------------------ */
-export function EntryPopover({ e, anchor, project, workTypes, chunks, days, onChange, onRemove, onCopy, onSplit, onClose }) {
+export function EntryPopover({ e, anchor, project, workTypes, chunks, days, locked, onChange, onRemove, onCopy, onSplit, onClose }) {
   const ref = useRef(null)
   const [pos, setPos] = useState({ top: 0, left: 0, side: 'right' })
   const [note, setNote] = useState(e.note || '')
@@ -280,7 +282,8 @@ export function EntryPopover({ e, anchor, project, workTypes, chunks, days, onCh
   function saveNote() { if ((note || '') !== (e.note || '')) onChange({ note: note.trim() || null }) }
 
   return (
-    <div ref={ref} className={`pop ${pos.side}`} style={{ top: pos.top, left: pos.left }} role="dialog" aria-label={`Edit ${project?.name}`}>
+    <div ref={ref} className={`pop ${pos.side} ${locked ? 'locked' : ''}`} style={{ top: pos.top, left: pos.left }} role="dialog" aria-label={`Edit ${project?.name}`}>
+      {locked && <div className="note info" style={{ marginBottom: 10 }}>This week has been submitted, so it's locked. Withdraw it from the top of the page if you need to change something.</div>}
       <div className="row between" style={{ marginBottom: 10 }}>
         <div className="row" style={{ gap: 8, minWidth: 0 }}><span className="swatch" style={{ background: project?.colour }} /><div className="col" style={{ gap: 0, minWidth: 0 }}><b style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{project?.name}</b><span className="tiny muted">{project?.client?.name} · {dayName(e.entry_date)} {shortDate(e.entry_date)}</span></div></div>
         <b style={{ fontSize: 18, whiteSpace: 'nowrap' }}>{fmtHours(e.hours)}</b>

@@ -22,7 +22,9 @@ function periodRange(p, custom) {
 }
 
 export default function Reports() {
-  const { isAdmin, profile } = useAuth()
+  const { isAdmin, profile, settings } = useAuth()
+  const approvalsOn = settings?.require_approval === true || settings?.require_approval === 'true'
+  const [queue, setQueue] = useState([])
   const [period, setPeriod] = useState('month')
   const [custom, setCustom] = useState({ from: monthRange()[0], to: today() })
   const [client, setClient] = useState('all')
@@ -50,8 +52,10 @@ export default function Reports() {
       supabase.rpc('project_totals'),
       supabase.rpc('week_shortfalls', { p_week_start: lastWeek }),
       supabase.from('projects').select('id, budget_hours'),
-    ]).then(([e, p, s, pr]) => {
+      supabase.rpc('approvals_queue'),
+    ]).then(([e, p, s, pr, q]) => {
       if (dead) return
+      setQueue(q.data || [])
       setRows((e.data || []).map((r) => ({ ...r, hours: Number(r.hours) })))
       const budgets = Object.fromEntries((pr.data || []).map((x) => [x.id, Number(x.budget_hours)]))
       setProjectTotals((p.data || []).map((r) => ({ ...r, budget_hours: budgets[r.project_id] || 0 })))
@@ -127,7 +131,7 @@ export default function Reports() {
       return k
     }
     const m = new Map()
-    scoped.forEach((r) => { const k = keyOf(r.entry_date); if (!m.has(k)) m.set(k, { key: k, label: labelOf(k), billable: 0, internal: 0, days: new Set() }); const b = m.get(k); b[r.billable ? 'billable' : 'internal'] += r.hours })
+    scoped.filter((r) => r.counts_toward_target !== false).forEach((r) => { const k = keyOf(r.entry_date); if (!m.has(k)) m.set(k, { key: k, label: labelOf(k), billable: 0, internal: 0, days: new Set() }); const b = m.get(k); b[r.billable ? 'billable' : 'internal'] += r.hours })
     // working days per bucket within the selected range
     const lo = from < '2020-01-01' ? (scoped.length ? scoped.reduce((a, r) => (r.entry_date < a ? r.entry_date : a), scoped[0].entry_date) : from) : from
     const latest = scoped.length ? scoped.reduce((a, r) => (r.entry_date > a ? r.entry_date : a), scoped[0].entry_date) : today()
@@ -175,6 +179,15 @@ export default function Reports() {
       { label: 'Billable', value: (r) => (r.billable ? 'Yes' : 'No') }, { label: 'Work type', value: 'work_type' },
       { label: 'Hours', value: 'hours' }, { label: 'Note', value: 'note' }, { label: 'Source', value: 'source' },
     ])
+  }
+
+  async function decide(q, status) {
+    let note = null
+    if (status === 'returned') { note = prompt(`What should ${q.person?.split(' ')[0] || 'they'} fix?`); if (note === null) return }
+    const { data, error } = await supabase.rpc('decide_week', { p_profile: q.profile_id, p_week_start: q.week_start, p_status: status, p_note: note })
+    if (error) { flash(error.message); return }
+    setQueue((qs) => qs.map((x) => (x.id === q.id ? { ...x, status: data.status, decided_at: data.decided_at, note: data.note } : x)))
+    flash(status === 'approved' ? 'Week approved' : 'Sent back with your note')
   }
 
   async function remind(s) {
@@ -233,7 +246,7 @@ export default function Reports() {
           <div className="charts">
             <section className="dark chart-card">
               <div className="row between wrap" style={{ gap: 10 }}>
-                <h2>Hours logged over time<Hint title="Hours over time" text="Each column is one day, week, month, quarter or year, depending on the switch. The gradient part is billable client work, the lighter cap is internal time. The number on top is the total. The gold dashed line is the target for that period: working days × 7.5h × the number of people in scope. A column that falls well short of the line means time isn't being captured, not that people weren't working." /></h2>
+                <h2>Hours logged over time<Hint title="Hours over time" text="Each column is one day, week, month, quarter or year, depending on the switch. The gradient part is billable client work, the lighter cap is internal time. The number on top is the total. The gold dashed line is the target for that period: working days × 7.5h × the number of people in scope. A column that falls well short of the line means time isn't being captured, not that people weren't working. Lunch and breaks are left out of this chart because they don't count towards the target." /></h2>
                 <div className="seg dark-seg" role="tablist" aria-label="Chart granularity">
                   {[['day', 'Day'], ['week', 'Week'], ['month', 'Month'], ['quarter', 'Quarter'], ['year', 'Year']].map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={gran === k} className={gran === k ? 'on' : ''} onClick={() => setGran(k)}>{l}</button>)}
                 </div>
@@ -293,6 +306,26 @@ export default function Reports() {
         </section>
 
         <aside className="col" style={{ flex: '1 1 300px', maxWidth: 380, gap: 14 }}>
+          {approvalsOn && (
+            <div className="panel panel-b col" style={{ gap: 10 }}>
+              <div className="row between"><h2>Weeks to approve<Hint title="Approvals" text="Weeks your people have submitted. Approve locks the week for good. Return sends it back with a note so they can fix it and resubmit. Admins see everyone, managers see their own reports." /></h2>{queue.filter((q) => q.status === 'submitted').length > 0 && <span className="tag warn">{queue.filter((q) => q.status === 'submitted').length} waiting</span>}</div>
+              {queue.filter((q) => q.status === 'submitted').map((q) => (
+                <div className="col" key={q.id} style={{ padding: '8px 0', borderBottom: '1px dotted var(--line)', gap: 6 }}>
+                  <div className="row" style={{ gap: 10 }}>
+                    <span className="avatar sm" style={{ background: av(q.person || q.email) }}>{initials(q.person || q.email)}</span>
+                    <div className="col grow" style={{ gap: 0, minWidth: 0 }}><b className="small" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{q.person || q.email}</b><span className="tiny muted">Week of {longDate(q.week_start)} · {q.team || 'No team'}</span></div>
+                    <b className="small" style={{ whiteSpace: 'nowrap', color: Number(q.logged_hours) >= Number(q.weekly_target) ? 'var(--ok)' : 'var(--warn)' }}>{fmtHours(q.logged_hours)}</b>
+                  </div>
+                  <div className="row" style={{ gap: 6, justifyContent: 'flex-end' }}>
+                    <a className="btn sm ghost" href={`/week/${q.week_start}`} onClick={(ev) => { ev.preventDefault(); setPerson(q.profile_id); setPeriod('custom'); setCustom({ from: q.week_start, to: addDays(q.week_start, 6) }) }}>View</a>
+                    <button className="btn sm" onClick={() => decide(q, 'returned')}>Return</button>
+                    <button className="btn sm primary" onClick={() => decide(q, 'approved')}>Approve</button>
+                  </div>
+                </div>
+              ))}
+              {!queue.some((q) => q.status === 'submitted') && !loading && <div className="note info">Nothing waiting. Recently decided weeks: {queue.length ? queue.slice(0, 5).map((q) => `${q.person?.split(' ')[0] || q.email} (${q.status})`).join(', ') : 'none yet'}.</div>}
+            </div>
+          )}
           <div className="panel panel-b col" style={{ gap: 10 }}>
             <div className="row between"><h2>Short of target last week<Hint title="Short of target" text="Anyone who logged less than their weekly target last week, with how far short they were. Remind notes that you've chased them so nobody gets nudged twice. Once the Outlook phase is in, the Friday and Monday emails go out automatically." /></h2>{shortfalls.some((s) => !s.reminded_at) && <button className="btn sm primary" onClick={remindAll}>Remind all</button>}</div>
             <span className="small muted">Week of {longDate(lastWeek)}. Automatic Friday and Monday emails arrive with the Outlook phase. Until then use this to chase by hand.</span>

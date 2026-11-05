@@ -15,6 +15,12 @@ const DEFAULT_CHUNKS = [
   { label: '½ day', hours: 3.75 }, { label: 'Full day', hours: 7.5 },
 ]
 
+function useNarrow(px = 720) {
+  const [n, setN] = useState(() => typeof window !== 'undefined' && window.matchMedia(`(max-width: ${px}px)`).matches)
+  useEffect(() => { const mq = window.matchMedia(`(max-width: ${px}px)`); const h = (e) => setN(e.matches); mq.addEventListener('change', h); return () => mq.removeEventListener('change', h) }, [px])
+  return n
+}
+
 export default function MyWeek() {
   const { user, weeklyTarget, settings } = useAuth()
   const params = useParams()
@@ -25,6 +31,7 @@ export default function MyWeek() {
   const dayHours = Number(settings.day_hours ?? 7.5)
   const dayStart = timeToHours(settings.day_start) ?? 9
   const dayEnd = timeToHours(settings.day_end) ?? 17.5
+  const approvalsOn = settings.require_approval === true || settings.require_approval === 'true'
 
   const [projects, setProjects] = useState([])
   const [workTypes, setWorkTypes] = useState([])
@@ -43,6 +50,11 @@ export default function MyWeek() {
   const [toast, setToast] = useState('')
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
+  const [approval, setApproval] = useState(null) // week_approvals row for this week, if any
+  const narrow = useNarrow()
+  const [selDay, setSelDay] = useState(() => (weekDays(ws).includes(today()) ? today() : weekDays(ws)[0]))
+  const [sheetOpen, setSheetOpen] = useState(false)
+  useEffect(() => { setSelDay(days.includes(today()) ? today() : days[0]) }, [days])
 
   const flash = (m) => { setToast(m); setTimeout(() => setToast(''), 2200) }
 
@@ -51,12 +63,13 @@ export default function MyWeek() {
     const seq = ++loadSeq.current
     try {
       setErr('')
-      const [p, w, a, t, e, s] = await Promise.all([
+      const [p, w, a, t, e, s, ap] = await Promise.all([
         fetchProjects(), fetchWorkTypes(), fetchMyAllocations(user.id), fetchMyProjectTotals(),
         fetchWeekEntries(user.id, days[0], days[4]), fetchPendingSuggestions(user.id),
+        supabase.from('week_approvals').select('*').eq('profile_id', user.id).eq('week_start', days[0]).maybeSingle().then(({ data }) => data),
       ])
       if (seq !== loadSeq.current) return // a newer week was requested while this one loaded
-      setProjects(p); setWorkTypes(w); setTotals(t); setSuggestions(s)
+      setProjects(p); setWorkTypes(w); setTotals(t); setSuggestions(s); setApproval(ap || null)
       const am = {}; a.forEach((r) => { am[r.project_id] = r.hours === null ? true : Number(r.hours) }); setAllocs(am)
       setEntries(e.map((x) => ({ ...x, hours: Number(x.hours) })))
     } catch (ex) { setErr(ex.message || String(ex)) }
@@ -106,8 +119,10 @@ export default function MyWeek() {
   const filtering = quick !== 'all' || clientFilter !== 'all' || query.trim()
 
   // ---- entries
-  const weekTotal = entries.reduce((a, e) => a + (e.hours || 0), 0)
-  const billable = entries.reduce((a, e) => a + ((projById[e.project_id]?.billable) ? e.hours || 0 : 0), 0)
+  const countsE = (e) => projById[e.project_id]?.counts_toward_target !== false
+  const weekTotal = entries.reduce((a, e) => a + (countsE(e) ? e.hours || 0 : 0), 0)
+  const notCounted = entries.reduce((a, e) => a + (countsE(e) ? 0 : e.hours || 0), 0)
+  const billable = entries.reduce((a, e) => a + ((projById[e.project_id]?.billable && countsE(e)) ? e.hours || 0 : 0), 0)
   const remaining = Math.max(0, Math.round((weeklyTarget - weekTotal) * 60) / 60)
 
   // First gap of at least `len` hours on a day, from `fromT` onwards; else straight after the last block.
@@ -130,8 +145,10 @@ export default function MyWeek() {
     return { start, hours }
   }
   // Dropping a project creates a one-hour block at that time (or the next gap), then opens the editor on it.
+  const locked = !!approval && (approval.status === 'submitted' || approval.status === 'approved')
   async function addEntry(projectId, date, at = null, anchorAfter = true) {
     if (!projById[projectId]) return
+    if (locked) { setDragging(null); setOver(null); flash('This week is locked while it waits for approval'); return }
     setDragging(null); setOver(null)
     const { start: startT, hours: len } = at === null ? { start: nextFree(date, dayStart, 1), hours: 1 } : placeAt(date, at, 1)
     try {
@@ -182,7 +199,20 @@ export default function MyWeek() {
   }
   async function refreshTotals() { try { setTotals(await fetchMyProjectTotals()) } catch {} }
 
+  async function submitWeek() {
+    if (remaining > 0 && !confirm(`You're ${fmtHours(remaining)} short of ${weeklyTarget}h. Submit anyway?`)) return
+    const { data, error } = await supabase.rpc('submit_week', { p_week_start: ws })
+    if (error) { flash(error.message); return }
+    setApproval(data); setEditing(null); flash('Week submitted for approval')
+  }
+  async function withdrawWeek() {
+    const { error } = await supabase.rpc('withdraw_week', { p_week_start: ws })
+    if (error) { flash(error.message); return }
+    setApproval(null); flash('Week withdrawn, you can edit it again')
+  }
+
   async function repeatLastWeek() {
+    if (locked) { flash('This week is locked while it waits for approval'); return }
     const { data, error } = await supabase.rpc('repeat_last_week', { p_week_start: ws })
     if (error) { flash(error.message); return }
     flash(data ? `Copied ${data} ${data === 1 ? 'entry' : 'entries'} from last week` : 'Nothing new to copy from last week')
@@ -206,6 +236,7 @@ export default function MyWeek() {
   function projDown(p) {
     return (ev) => {
       if (ev.button !== 0) return
+      if (narrow) { addEntry(p.id, selDay, null); setSheetOpen(false); return }
       const g = { p, x0: ev.clientX, y0: ev.clientY, moved: false, target: null, chip: null }
       projDrag.current = g
       const move = (e2) => {
@@ -231,7 +262,7 @@ export default function MyWeek() {
       window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up)
     }
   }
-  const quickAddDate = days.includes(today()) ? today() : days[0]
+  const quickAddDate = narrow ? selDay : days.includes(today()) ? today() : days[0]
 
   const t = today()
   const isCurrentWeek = ws === weekStart(t)
@@ -257,7 +288,13 @@ export default function MyWeek() {
         <div className="row" style={{ gap: 10 }}>
           {!loading && remaining > 0 && <span className="banner warn"><Info /> {fmtHours(remaining)} still to log this week</span>}
           {!loading && remaining === 0 && <span className="banner ok"><Check /> Week complete, nice one</span>}
-          <span className="row" style={{ gap: 6 }}><button className="btn" onClick={repeatLastWeek}><Repeat /> Repeat last week</button><Hint align="right" title="Repeat last week" text="Copies last week's entries into this week, same days, same hours, same work types, so you only have to tweak what changed. It skips anything that would be a duplicate and ignores archived projects." /></span>
+          {approvalsOn && !loading && (
+            approval?.status === 'approved' ? <span className="approval-chip approved" title={`Approved ${approval.decided_at ? new Date(approval.decided_at).toLocaleDateString('en-GB') : ''}`}><Check /> Approved</span>
+            : approval?.status === 'submitted' ? <span className="row" style={{ gap: 6 }}><span className="approval-chip submitted">Awaiting approval</span><button className="btn sm" onClick={withdrawWeek}>Withdraw</button></span>
+            : approval?.status === 'returned' ? <span className="row" style={{ gap: 6 }}><span className="approval-chip returned" title={approval.note || ''}>Returned{approval.note ? `: ${approval.note}` : ''}</span><button className="btn sm primary" onClick={submitWeek}>Resubmit</button></span>
+            : <span className="row" style={{ gap: 6 }}><button className="btn sm primary" onClick={submitWeek}>Submit week</button><Hint align="right" title="Submit for approval" text="When you're happy the week is right, submit it and your manager gets it to sign off. It locks while it's waiting. If you spot a mistake, withdraw it, fix it and submit again. If your manager sends it back, you'll see their note here." /></span>
+          )}
+          <span className="row" style={{ gap: 6 }}><button className="btn" onClick={repeatLastWeek} disabled={locked}><Repeat /> Repeat last week</button><Hint align="right" title="Repeat last week" text="Copies last week's entries into this week, same days, same hours, same work types, so you only have to tweak what changed. It skips anything that would be a duplicate and ignores archived projects." /></span>
         </div>
       </div>
 
@@ -265,7 +302,9 @@ export default function MyWeek() {
 
       <div className="week-layout">
         {/* Projects */}
-        <aside className="week-side panel side-panel">
+        {narrow && sheetOpen && <div className="sheet-backdrop" onClick={() => setSheetOpen(false)} aria-hidden="true" />}
+        <aside className={`week-side panel side-panel ${narrow ? 'sheet' : ''} ${sheetOpen ? 'open' : ''}`} aria-hidden={narrow && !sheetOpen}>
+          {narrow && <div className="row between" style={{ marginBottom: 4 }}><b>Add to {dayName(selDay)} {shortDate(selDay)}</b><button className="icon-btn" aria-label="Close" onClick={() => setSheetOpen(false)}>✕</button></div>}
           <div className="row between"><span className="row" style={{ gap: 6 }}><h2>My projects</h2><Hint title="My projects" text="Every live project you can log time to, grouped by client. Mine shows only projects you've been put on, Recent shows ones you've logged against before, and the dropdown narrows to one client. Click a client name to fold its projects away. Can't see a project? Ask an admin to add it." /></span><span className="tiny muted">Drag onto a day</span></div>
           <label className="search"><Search style={{ color: 'var(--muted)' }} /><span className="sr">Search projects</span>
             <input type="search" placeholder="Search client or project…" value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -322,11 +361,19 @@ export default function MyWeek() {
 
         {/* Week board */}
         <main className="week-main">
-          <div className="board">
+          {narrow && (
+            <div className="day-tabs" role="tablist" aria-label="Day">
+              {days.map((d) => {
+                const tot = entries.filter((e) => e.entry_date === d && countsE(e)).reduce((a, e) => a + (e.hours || 0), 0)
+                return <button key={d} role="tab" aria-selected={d === selDay} className={`day-tab ${d === selDay ? 'on' : ''} ${d === t ? 'today' : ''}`} onClick={() => setSelDay(d)}><span>{dayName(d)}</span><b>{shortDate(d).split(' ')[0]}</b><i className={tot >= dayHours ? 'ok' : tot > 0 ? 'part' : d < t ? 'short' : ''} /></button>
+              })}
+            </div>
+          )}
+          <div className={`board ${locked ? 'locked' : ''} ${narrow ? 'single' : ''}`}>
             <TimeGutter from={weekRange[0]} to={weekRange[1]} dayStart={dayStart} dayEnd={dayEnd} />
-            {days.map((d) => (
+            {(narrow ? [selDay] : days).map((d) => (
               <DayColumn key={d} date={d} entries={entries.filter((e) => e.entry_date === d)} dayHours={dayHours} dayStart={dayStart} dayEnd={dayEnd} range={weekRange} projById={projById} wtById={wtById}
-                isToday={d === t} isFirst={d === days[0]} editingId={editing?.id}
+                isToday={d === t} isFirst={d === days[0]} editingId={editing?.id} locked={locked}
                 onOpen={(e, el) => setEditing((ed) => (ed?.id === e.id ? null : { id: e.id, anchor: el }))}
                 onResize={(e, h, startT) => commit(e, { hours: h, start_time: hoursToTime(startT) })}
                 onMove={(e, date, startT, copy) => moveEntry(e, date, startT, copy)} />
@@ -334,7 +381,7 @@ export default function MyWeek() {
           </div>
           {editingEntry && <div className="pop-backdrop" onMouseDown={() => setEditing(null)} aria-hidden="true" />}
           {editingEntry && (
-            <EntryPopover e={editingEntry} anchor={editing.anchor} project={projById[editingEntry.project_id]} workTypes={workTypes} chunks={chunks} days={days}
+            <EntryPopover e={editingEntry} anchor={editing.anchor} project={projById[editingEntry.project_id]} workTypes={workTypes} chunks={chunks} days={days} locked={locked}
               onChange={(f) => commit(editingEntry, f)} onRemove={remove} onCopy={(e, date) => moveEntry(e, date, date === e.entry_date ? null : startOf(e, dayStart), true)} onSplit={splitEntry} onClose={() => setEditing(null)} />
           )}
         </main>
@@ -347,13 +394,14 @@ export default function MyWeek() {
               <span className="small" style={{ opacity: .7 }}>of {weeklyTarget} hrs</span>
             </Ring>
             <div style={{ fontWeight: 600, textAlign: 'center' }} className="row">
-              <Hint align="center" title="Your week" text="Everything you've logged this week against your target (normally 37.5 hours). Billable is time on client projects. Internal is pitches, admin, learning, leave and so on. Both count towards the target, so a week off still adds up to 37.5." />
+              <Hint align="center" title="Your week" text="Everything you've logged this week against your target (normally 37.5 hours). Billable is time on client projects. Internal is pitches, admin, learning, leave and so on. Both count towards the target, so a week off still adds up to 37.5. Lunch and breaks are the exception: log them if you like, they just don't count." />
               {remaining > 0 ? `${fmtHours(remaining)} to go this week` : weekTotal > weeklyTarget ? `${fmtHours(weekTotal - weeklyTarget)} over, all logged` : `All ${weeklyTarget} hours logged`}
             </div>
             <div className="stat-grid">
               <div className="col" style={{ gap: 2 }}><span className="tiny" style={{ opacity: .7 }}>Billable</span><b style={{ color: 'var(--gold)' }}>{fmtHours(billable)}</b></div>
               <div className="col" style={{ gap: 2 }}><span className="tiny" style={{ opacity: .7 }}>Internal</span><b>{fmtHours(weekTotal - billable)}</b></div>
             </div>
+            {notCounted > 0 && <span className="tiny" style={{ opacity: .6, textAlign: 'center' }}>plus {fmtHours(notCounted)} of lunch and breaks, not counted</span>}
           </div>
 
           {suggestions.length > 0 && (
@@ -390,6 +438,7 @@ export default function MyWeek() {
           </div>
         </aside>
       </div>
+      {narrow && !sheetOpen && !locked && <button className="fab" onClick={() => setSheetOpen(true)} aria-label="Log time"><Plus /> Log time</button>}
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   )
