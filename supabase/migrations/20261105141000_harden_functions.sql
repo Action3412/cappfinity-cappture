@@ -1,0 +1,12 @@
+alter function public.set_updated_at() set search_path = public;
+alter function public.week_start(date) set search_path = public;
+revoke execute on function public.handle_new_user() from anon, authenticated, public;
+revoke execute on function public.guard_profile_update() from anon, authenticated, public;
+revoke execute on function public.set_updated_at() from anon, authenticated, public;
+revoke execute on function public.app_role_of(uuid) from anon, public;
+revoke execute on function public.is_admin() from anon, public;
+revoke execute on function public.is_manager_or_admin() from anon, public;
+revoke execute on function public.is_active_user() from anon, public;
+revoke execute on function public.my_team_id() from anon, public;
+revoke execute on function public.repeat_last_week(date) from anon, public;
+revoke execute on function public.week_shortfalls(date) from anon, public;
