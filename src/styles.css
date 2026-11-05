@@ -292,3 +292,6 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none 
 .track-free { display: none; }
 .drag-chip { position: fixed; z-index: 1000; pointer-events: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; background: #fff; border: 1px solid var(--line); box-shadow: 0 12px 30px rgba(38,38,38,.2); font-size: 13px; white-space: nowrap; }
 .proj { touch-action: pan-y; }
+.track, .track * { user-select: none; -webkit-user-select: none; }
+.block-handle { height: 16px; }
+.block-handle.top { padding-top: 4px; }
