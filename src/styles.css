@@ -370,3 +370,10 @@ h1 + .hint { margin-left: 2px; }
 .filter:focus-within { background: var(--violet-bg); border-radius: 11px; }
 .filter-clear { align-self: center; margin: 0 6px 0 2px; height: 28px; padding: 0 10px; border-radius: 8px; border: 0; background: var(--bg); font-size: 12px; font-weight: 600; color: var(--text-2); }
 .filter-clear:hover { background: var(--line-soft); }
+.dark-seg { background: rgba(255,255,255,.08); }
+.dark-seg button { color: rgba(255,255,255,.7); }
+.dark-seg button.on { background: #fff; color: var(--charcoal); }
+.readout { display: flex; flex-wrap: wrap; gap: 6px 18px; padding-top: 10px; border-top: 1px dotted rgba(255,255,255,.2); font-size: 13px; color: rgba(255,255,255,.75); line-height: 1.5; }
+.readout b { color: #fff; }
+.readout .warn { color: #FDB601; } .readout .warn b { color: #FDB601; }
+.readout .ok { color: #7ED9A5; }

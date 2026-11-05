@@ -32,7 +32,7 @@ export function WeeklyColumns({ data, target }) {
   const { show, hide, Tip } = useTip()
   const [wrapRef, W] = useWidth(640)
   const H = 220, padL = 34, padR = 10, padT = 18, padB = 26
-  const max = niceMax(Math.max(target || 0, ...data.map((d) => d.billable + d.internal)) * 1.05)
+  const max = niceMax(Math.max(target || 0, ...data.map((d) => Math.max(d.billable + d.internal, d.target || 0))) * 1.05)
   const iw = W - padL - padR, ih = H - padT - padB
   const n = Math.max(1, data.length)
   const slot = iw / n, bw = Math.min(26, Math.max(10, slot * 0.5))
@@ -47,15 +47,16 @@ export function WeeklyColumns({ data, target }) {
           </linearGradient>
         </defs>
         {ticks.map((tv) => <g key={tv}><line x1={padL} x2={W - padR} y1={y(tv)} y2={y(tv)} stroke="rgba(255,255,255,.1)" strokeDasharray={tv ? '2 4' : undefined} /><text x={padL - 8} y={y(tv) + 3.5} textAnchor="end" fontSize="10" fill="rgba(255,255,255,.55)">{tv % 1 ? tv.toFixed(1) : tv}</text></g>)}
-        {target > 0 && target <= max && <g><line x1={padL} x2={W - padR} y1={y(target)} y2={y(target)} stroke="#FDB601" strokeOpacity=".9" strokeDasharray="5 4" /><text x={W - padR} y={y(target) - 6} textAnchor="end" fontSize="10" fontWeight="700" fill="#FDB601">target {target}h</text></g>}
+        {target > 0 && target <= max && data.every((d) => !d.target || d.target === target) && <g><line x1={padL} x2={W - padR} y1={y(target)} y2={y(target)} stroke="#FDB601" strokeOpacity=".9" strokeDasharray="5 4" /><text x={W - padR} y={y(target) - 6} textAnchor="end" fontSize="10" fontWeight="700" fill="#FDB601">target {target}h</text></g>}
         {data.map((d, i) => {
           const x = padL + i * slot + (slot - bw) / 2
           const yb = y(d.billable), yi = y(d.billable + d.internal), tot = d.billable + d.internal
           return (
-            <g key={d.label} onMouseMove={(ev) => show(ev, { title: `Week of ${d.label}`, lines: [['Billable', fmtHours(d.billable), '#9275FA'], ['Internal', fmtHours(d.internal), 'rgba(255,255,255,.5)'], ['Total', fmtHours(tot)]] })} onMouseLeave={hide}>
+            <g key={d.label} onMouseMove={(ev) => show(ev, { title: d.label, lines: [['Billable', fmtHours(d.billable), '#9275FA'], ['Internal', fmtHours(d.internal), 'rgba(255,255,255,.5)'], ['Total', fmtHours(tot)], ...(d.target ? [['Target', fmtHours(d.target), '#FDB601'], ['Of target', Math.round((tot / d.target) * 100) + '%']] : [])] })} onMouseLeave={hide}>
               <rect x={padL + i * slot} y={padT} width={slot} height={ih} fill="transparent" />
               {d.billable > 0 && <rect x={x} y={yb} width={bw} height={y(0) - yb} fill="url(#col-spectrum)" rx="4" />}
               {d.internal > 0 && <rect x={x} y={yi} width={bw} height={Math.max(2, yb - yi - 2)} fill={INTERNAL} rx="4" />}
+              {d.target > 0 && data.some((o) => o.target !== d.target) && <line x1={x - 6} x2={x + bw + 6} y1={y(Math.min(d.target, max))} y2={y(Math.min(d.target, max))} stroke="#FDB601" strokeDasharray="4 3" strokeOpacity=".9" />}
               {tot > 0 && <text x={x + bw / 2} y={yi - 7} textAnchor="middle" fontSize="11" fontWeight="700" fill="#fff">{tot % 1 ? tot.toFixed(1) : tot}</text>}
               <text x={x + bw / 2} y={H - 8} textAnchor="middle" fontSize="10" fill="rgba(255,255,255,.6)">{d.label}</text>
             </g>

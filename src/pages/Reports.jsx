@@ -36,6 +36,7 @@ export default function Reports() {
   const [expanded, setExpanded] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showRates, setShowRates] = useState(false)
+  const [gran, setGran] = useState('week') // day | week | month | quarter | year
   const [toast, setToast] = useState('')
   const flash = (m) => { setToast(m); setTimeout(() => setToast(''), 2500) }
 
@@ -103,13 +104,44 @@ export default function Reports() {
   }, [scoped])
 
   // ---- chart data (all within the current filters)
-  const weekly = useMemo(() => {
-    const m = new Map()
-    scoped.forEach((r) => { const k = r.week_start; if (!m.has(k)) m.set(k, { label: shortDate(k), billable: 0, internal: 0, key: k }); m.get(k)[r.billable ? 'billable' : 'internal'] += r.hours })
-    return [...m.values()].sort((a, b) => a.key.localeCompare(b.key)).slice(-12)
-  }, [scoped])
   const peopleInScope = new Set(scoped.map((r) => r.profile_id)).size
-  const weeklyTarget = peopleInScope * 37.5
+  const dayHours = 7.5
+  // Bucket entries by the chosen granularity. Each bucket carries its own target:
+  // working days in the bucket (clipped to the selected range) × 7.5h × people in scope.
+  const buckets = useMemo(() => {
+    const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const keyOf = (d) => {
+      const [y, m] = d.split('-').map(Number)
+      if (gran === 'day') return d
+      if (gran === 'week') return weekStart(d)
+      if (gran === 'month') return `${y}-${String(m).padStart(2, '0')}`
+      if (gran === 'quarter') return `${y}-Q${Math.floor((m - 1) / 3) + 1}`
+      return String(y)
+    }
+    const labelOf = (k) => {
+      if (gran === 'day') return `${dayName(k)} ${shortDate(k)}`
+      if (gran === 'week') return shortDate(k)
+      if (gran === 'month') { const [y, m] = k.split('-').map(Number); return `${MON[m - 1]} ${String(y).slice(2)}` }
+      if (gran === 'quarter') { const [y, q] = k.split('-Q'); return `Q${q} ${y}` }
+      return k
+    }
+    const m = new Map()
+    scoped.forEach((r) => { const k = keyOf(r.entry_date); if (!m.has(k)) m.set(k, { key: k, label: labelOf(k), billable: 0, internal: 0, days: new Set() }); const b = m.get(k); b[r.billable ? 'billable' : 'internal'] += r.hours })
+    // working days per bucket within the selected range
+    const lo = from < '2020-01-01' ? (scoped.length ? scoped.reduce((a, r) => (r.entry_date < a ? r.entry_date : a), scoped[0].entry_date) : from) : from
+    const hi = to > today() ? today() : to
+    for (let d = lo; d <= hi; d = addDays(d, 1)) { const dow = dayName(d); if (dow === 'Sat' || dow === 'Sun') continue; const k = keyOf(d); if (m.has(k)) m.get(k).days.add(d) }
+    return [...m.values()].sort((a, b) => a.key.localeCompare(b.key)).map((b) => ({ ...b, target: b.days.size * dayHours * peopleInScope })).slice(-14)
+  }, [scoped, gran, from, to, peopleInScope])
+  const bucketTarget = buckets.length ? Math.max(...buckets.map((b) => b.target)) : 0
+  const readout = useMemo(() => {
+    const tot = buckets.reduce((a, b) => a + b.billable + b.internal, 0)
+    const tgt = buckets.reduce((a, b) => a + b.target, 0)
+    const bill = buckets.reduce((a, b) => a + b.billable, 0)
+    const under = buckets.filter((b) => b.target > 0 && b.billable + b.internal < b.target * 0.9).length
+    const unit = { day: 'day', week: 'week', month: 'month', quarter: 'quarter', year: 'year' }[gran]
+    return { tot, tgt, bill, under, unit, n: buckets.length }
+  }, [buckets, gran])
   const byClient = useMemo(() => {
     const m = {}; scoped.forEach((r) => { m[r.client] = (m[r.client] || 0) + r.hours })
     return Object.entries(m).sort((a, b) => b[1] - a[1]).map(([label, value]) => ({ label, value }))
@@ -198,9 +230,20 @@ export default function Reports() {
         <>
           <div className="charts">
             <section className="dark chart-card">
-              <h2>Hours by week<Hint title="Hours by week" text="Each column is a week in the range: billable in the gradient, internal in the lighter shade, total on top. The gold dashed line is what the people in scope would log if they all hit 37.5, so a column well below it means time isn't being captured." /></h2>
-              <span className="sub">{peopleInScope} {peopleInScope === 1 ? 'person' : 'people'} in scope{weekly.length > 11 ? ' · last 12 weeks' : ''}</span>
-              <WeeklyColumns data={weekly} target={weeklyTarget} />
+              <div className="row between wrap" style={{ gap: 10 }}>
+                <h2>Hours logged over time<Hint title="Hours over time" text="Each column is one day, week, month, quarter or year, depending on the switch. The gradient part is billable client work, the lighter cap is internal time. The number on top is the total. The gold dashed line is the target for that period: working days × 7.5h × the number of people in scope. A column that falls well short of the line means time isn't being captured, not that people weren't working." /></h2>
+                <div className="seg dark-seg" role="tablist" aria-label="Chart granularity">
+                  {[['day', 'Day'], ['week', 'Week'], ['month', 'Month'], ['quarter', 'Quarter'], ['year', 'Year']].map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={gran === k} className={gran === k ? 'on' : ''} onClick={() => setGran(k)}>{l}</button>)}
+                </div>
+              </div>
+              <span className="sub">{peopleInScope} {peopleInScope === 1 ? 'person' : 'people'} in scope · by {readout.unit}{buckets.length >= 14 ? ' · last 14 shown' : ''}</span>
+              <WeeklyColumns data={buckets} target={bucketTarget} />
+              <div className="readout">
+                <span><b>{fmtHours(readout.tot)}</b> logged across {readout.n} {readout.unit}{readout.n === 1 ? '' : 's'}{readout.tgt ? <>, <b>{Math.round((readout.tot / readout.tgt) * 100)}%</b> of the {fmtHours(readout.tgt)} target</> : ''}.</span>
+                <span><b>{readout.tot ? Math.round((readout.bill / readout.tot) * 100) : 0}%</b> billable ({fmtHours(readout.bill)}).</span>
+                {readout.under > 0 && <span className="warn"><b>{readout.under}</b> {readout.under === 1 ? readout.unit : readout.unit + 's'} under 90% of target.</span>}
+                {readout.tgt > 0 && readout.under === 0 && <span className="ok">Every {readout.unit} is within 10% of target.</span>}
+              </div>
             </section>
             <section className="panel chart-card">
               <h2>Where the time went<Hint title="Where the time went" text="Share of hours by work type within the current filters. Handy for spotting a project that's all meetings and no delivery, or a team where QA is getting squeezed." /></h2>
