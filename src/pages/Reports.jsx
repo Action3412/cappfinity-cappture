@@ -6,7 +6,7 @@ import { downloadCSV } from '../lib/data.js'
 import { initials } from '../components/Shell.jsx'
 import { ChevronR, Download } from '../components/Icons.jsx'
 import Hint from '../components/Hint.jsx'
-import { WeeklyColumns, HBars, Donut, PersonWeekGrid, CAT, BILLABLE } from '../components/Charts.jsx'
+import { WeeklyColumns, HBars, Donut, PersonWeekGrid, CAT } from '../components/Charts.jsx'
 import { shortDate, dayName } from '../lib/time.js'
 
 const AVATARS = ['#FDE9A8', '#D8CFFE', '#FED3FB', '#C9D6FD', '#DDEFE5', '#F6D5C9']
@@ -194,28 +194,33 @@ export default function Reports() {
       {!loading && scoped.length > 0 && (
         <>
           <div className="charts">
-            <section className="panel panel-b col" style={{ gap: 6 }}>
-              <div className="row between"><h2>Hours by week<Hint title="Hours by week" text="Each column is a week in the range, billable in blue and internal in grey, with the total on top. The dashed line is what the people in scope would log if they all hit 37.5, so a column well below it means time isn't being captured." /></h2><span className="tiny muted">{weekly.length > 11 ? 'last 12 weeks' : ''}</span></div>
+            <section className="dark chart-card">
+              <h2>Hours by week<Hint title="Hours by week" text="Each column is a week in the range: billable in the gradient, internal in the lighter shade, total on top. The gold dashed line is what the people in scope would log if they all hit 37.5, so a column well below it means time isn't being captured." /></h2>
+              <span className="sub">{peopleInScope} {peopleInScope === 1 ? 'person' : 'people'} in scope{weekly.length > 11 ? ' · last 12 weeks' : ''}</span>
               <WeeklyColumns data={weekly} target={weeklyTarget} />
             </section>
-            <section className="panel panel-b col" style={{ gap: 6 }}>
+            <section className="panel chart-card">
               <h2>Where the time went<Hint title="Where the time went" text="Share of hours by work type within the current filters. Handy for spotting a project that's all meetings and no delivery, or a team where QA is getting squeezed." /></h2>
+              <span className="sub">By work type</span>
               <Donut data={donut} centreLabel="logged" centreValue={fmtHours(totalLogged)} />
             </section>
           </div>
           <div className="charts-2">
-            <section className="panel panel-b col" style={{ gap: 6 }}>
+            <section className="panel chart-card">
               <h2>Hours by client<Hint title="Hours by client" text="Total hours per client in the current filters, biggest first. Internal shows up here too so you can see client work against everything else." /></h2>
-              <HBars data={byClient} />
+              <span className="sub">Biggest first, with share of the total</span>
+              <HBars data={byClient} showShare />
             </section>
-            <section className="panel panel-b col" style={{ gap: 6 }}>
-              <h2>Billable share by person<Hint title="Billable share" text="The percentage of each person's logged hours that went on client work, highest first. Hover for the hours behind it. Low isn't necessarily bad: pitch and leadership roles will sit lower." /></h2>
-              <HBars data={billableByPerson} format={(v) => String(v)} suffix="%" max={100} colour={BILLABLE} />
+            <section className="panel chart-card">
+              <h2>Billable share by person<Hint title="Billable share" text="The percentage of each person's logged hours that went on client work, highest first. Hover a row for the hours behind it. Low isn't necessarily bad: pitch and leadership roles will sit lower." /></h2>
+              <span className="sub">Client hours as a share of everything logged</span>
+              <HBars data={billableByPerson} format={(v) => String(v)} suffix="%" max={100} gradient="linear-gradient(90deg, #FDB601, #FB6CF5)" />
             </section>
           </div>
           {grid.people.length > 1 && (
-            <section className="panel panel-b col" style={{ gap: 8 }}>
+            <section className="panel chart-card">
               <h2>Who logged what, by weekday<Hint title="By weekday" text="Hours per person per weekday across the range, darker is more. Pale Fridays and empty Mondays usually mean people are catching up at the end of the week rather than logging as they go." /></h2>
+              <span className="sub">Darker means more hours</span>
               <PersonWeekGrid people={grid.people} days={grid.days} />
             </section>
           )}

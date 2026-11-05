@@ -324,11 +324,12 @@ export default function MyWeek() {
             {days.map((d) => (
               <DayColumn key={d} date={d} entries={entries.filter((e) => e.entry_date === d)} dayHours={dayHours} dayStart={dayStart} dayEnd={dayEnd} projById={projById} wtById={wtById}
                 isToday={d === t} isFirst={d === days[0]} editingId={editing?.id}
-                onOpen={(e, el) => setEditing({ id: e.id, anchor: el })}
+                onOpen={(e, el) => setEditing((ed) => (ed?.id === e.id ? null : { id: e.id, anchor: el }))}
                 onResize={(e, h, startT) => commit(e, { hours: h, start_time: hoursToTime(startT) })}
                 onMove={(e, date, startT, copy) => moveEntry(e, date, startT, copy)} />
             ))}
           </div>
+          {editingEntry && <div className="pop-backdrop" onMouseDown={() => setEditing(null)} aria-hidden="true" />}
           {editingEntry && (
             <EntryPopover e={editingEntry} anchor={editing.anchor} project={projById[editingEntry.project_id]} workTypes={workTypes} chunks={chunks} days={days}
               onChange={(f) => commit(editingEntry, f)} onRemove={remove} onCopy={(e, date) => moveEntry(e, date, date === e.entry_date ? null : startOf(e, dayStart), true)} onSplit={splitEntry} onClose={() => setEditing(null)} />
