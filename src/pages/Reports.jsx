@@ -129,7 +129,8 @@ export default function Reports() {
     scoped.forEach((r) => { const k = keyOf(r.entry_date); if (!m.has(k)) m.set(k, { key: k, label: labelOf(k), billable: 0, internal: 0, days: new Set() }); const b = m.get(k); b[r.billable ? 'billable' : 'internal'] += r.hours })
     // working days per bucket within the selected range
     const lo = from < '2020-01-01' ? (scoped.length ? scoped.reduce((a, r) => (r.entry_date < a ? r.entry_date : a), scoped[0].entry_date) : from) : from
-    const hi = to > today() ? today() : to
+    const latest = scoped.length ? scoped.reduce((a, r) => (r.entry_date > a ? r.entry_date : a), scoped[0].entry_date) : today()
+    const hi = to > today() ? (latest > today() ? latest : today()) : to
     for (let d = lo; d <= hi; d = addDays(d, 1)) { const dow = dayName(d); if (dow === 'Sat' || dow === 'Sun') continue; const k = keyOf(d); if (m.has(k)) m.get(k).days.add(d) }
     return [...m.values()].sort((a, b) => a.key.localeCompare(b.key)).map((b) => ({ ...b, target: b.days.size * dayHours * peopleInScope })).slice(-14)
   }, [scoped, gran, from, to, peopleInScope])
