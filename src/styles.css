@@ -164,6 +164,8 @@ h1 { font-size: 24px; } h2 { font-size: 15px; } h3 { font-size: 13px; }
 .admin-nav { flex: 0 1 210px; min-width: 170px; display: flex; flex-direction: column; gap: 4px; }
 .admin-nav button { display: flex; justify-content: space-between; align-items: center; height: 42px; padding: 0 14px; border-radius: 10px; border: 0; background: transparent; font-weight: 600; font-size: 14px; text-align: left; }
 .admin-nav button.on { background: var(--charcoal); color: #fff; }
+.admin-nav a.on { background: var(--charcoal); color: #fff !important; }
+.admin-nav a:hover:not(.on) { background: var(--line-soft); }
 .admin-main { flex: 999 1 540px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
 .form-grid { display: grid; gap: 10px; align-items: end; }
 .note { padding: 12px 14px; border-radius: 12px; background: var(--warn-bg); color: var(--warn); font-size: 12px; line-height: 1.4; }
@@ -586,4 +588,12 @@ h1 + .hint { margin-left: 2px; }
   .day-tab { padding: 6px 2px 5px; } .day-tab b { font-size: 14px; }
   .week-nav-btn { padding: 0 6px; }
   .page h1 { font-size: 18px; }
+}
+@media (max-width: 720px) {
+  .admin-nav { align-items: center; }
+  .admin-nav h1 { margin: 0 6px 0 0 !important; font-size: 18px; }
+  .admin-nav a { flex: none; height: 34px !important; padding: 0 12px !important; white-space: nowrap; font-size: 13px !important; gap: 6px; border: 1px solid var(--line); background: #fff; }
+  .admin-nav a.on { background: var(--charcoal); color: #fff !important; border-color: var(--charcoal); }
+  .admin-nav a > span { white-space: nowrap; }
+  .banner { font-size: 12px; padding: 6px 10px; }
 }
