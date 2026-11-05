@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { fmtHours, parseDuration, dayName, shortDate, today, timeToHours, hoursToTime, fmtClock } from '../lib/time.js'
 import { Check, Calendar } from './Icons.jsx'
 import Hint from './Hint.jsx'
+import Ring from './Ring.jsx'
 
 export const PX_PER_HOUR = 64
 const MIN_H = 0.25
@@ -66,8 +67,11 @@ export function DayColumn({ date, entries, dayHours, dayStart, dayEnd, projById,
       <div className="day-progress" aria-hidden="true"><div style={{ width: `${pct}%` }} /></div>
       <div className="row between" style={{ padding: '2px 6px 4px' }}>
         <div className="row" style={{ gap: 6, alignItems: 'baseline' }}><b>{dayName(date)}</b><span className="small muted">{shortDate(date)}</span>{isToday && <span className="today-pip">Today</span>}</div>
-        <span className="small row day-total" style={{ gap: 4, fontWeight: 600 }}>
-          {state === 'done' && <Check width="13" height="13" />}{fmtHours(tot)}
+        <span className="small row day-total" style={{ gap: 8, fontWeight: 600 }}>
+          {fmtHours(tot)}
+          <Ring value={tot} target={dayHours} size={30} stroke={4} track="rgba(38,38,38,.08)" className="mini">
+            {state === 'done' && <Check width="12" height="12" style={{ color: 'var(--ok)' }} />}
+          </Ring>
           {isFirst && <Hint size={12} align="right" title="Your day" text={`The column is your working day, ${fmtClock(dayStart)} to ${fmtClock(dayEnd)}, and stretches if you worked outside that. Drop a project at the time you started it, pull either end of the block to set how long, and drag it up or down to move it. Gaps are fine: that's lunch. The number here is hours logged against your ${dayHours}h target.`} />}
         </span>
       </div>

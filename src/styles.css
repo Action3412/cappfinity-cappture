@@ -355,3 +355,6 @@ h1 + .hint { margin-left: 2px; }
 .kpi > span:first-child .hint, .panel-h h2 .hint, .chart-card h2 .hint { margin-left: 6px; }
 .label .hint { margin-left: 4px; }
 .hint-btn { line-height: 1; }
+.ring-wrap.mini { flex: 0 0 auto; }
+.ring-wrap.mini svg circle:last-child { transition: stroke-dasharray .4s ease; }
+.ring-wrap.mini .num { pointer-events: none; }
