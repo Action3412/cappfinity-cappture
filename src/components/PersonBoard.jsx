@@ -5,11 +5,14 @@ import { weekStart, weekDays, addDays, today, weekLabel, fmtHours, timeToHours, 
 import { DayColumn, TimeGutter, dayRange } from './DayBoard.jsx'
 import { ChevronL, ChevronR } from './Icons.jsx'
 import Hint from './Hint.jsx'
+import useNarrow from '../lib/useNarrow.js'
 
 // Read-only copy of someone's My week, for managers drilling into one person on the Reports page.
 // Same clock board, same colours, nothing can be dragged or edited. Clicking a block shows its details.
 export default function PersonBoard({ profileId, name, from, to }) {
   const { settings } = useAuth()
+  const narrow = useNarrow()
+  const [selDay, setSelDay] = useState(null)
   const dayHours = Number(settings.day_hours ?? 7.5)
   const dayStart = timeToHours(settings.day_start) ?? 9
   const dayEnd = timeToHours(settings.day_end) ?? 17.5
@@ -67,9 +70,18 @@ export default function PersonBoard({ profileId, name, from, to }) {
           <span className={`tag ${counted >= target ? 'ok' : counted > 0 ? 'warn' : 'grey'}`} style={{ marginLeft: 6 }}>{fmtHours(counted)} of {target}h</span>
         </div>
       </div>
-      <div className="board readonly" style={{ opacity: loading ? .6 : 1 }}>
+      {narrow && (
+        <div className="day-tabs" role="tablist" aria-label="Day">
+          {days.map((d) => {
+            const tot = rows.filter((r) => r.entry_date === d && r.counts_toward_target !== false).reduce((a, r) => a + r.hours, 0)
+            const on = (selDay || days[0]) === d
+            return <button key={d} role="tab" aria-selected={on} className={`day-tab ${on ? 'on' : ''}`} onClick={() => setSelDay(d)}><span>{dayName(d)}</span><b>{shortDate(d).split(' ')[0]}</b><i className={tot >= dayHours ? 'ok' : tot > 0 ? 'part' : d < t ? 'short' : ''} /></button>
+          })}
+        </div>
+      )}
+      <div className={`board readonly ${narrow ? 'single' : ''}`} style={{ opacity: loading ? .6 : 1 }}>
         <TimeGutter from={range[0]} to={range[1]} dayStart={dayStart} dayEnd={dayEnd} />
-        {days.map((d) => (
+        {(narrow ? [days.includes(selDay) ? selDay : days[0]] : days).map((d) => (
           <DayColumn key={d} date={d} entries={rows.filter((r) => r.entry_date === d)} dayHours={dayHours} dayStart={dayStart} dayEnd={dayEnd} range={range}
             projById={projById} wtById={wtById} isToday={d === t} isFirst={false} editingId={open?.e.id} locked
             onOpen={(e, el) => setOpen((o) => (o?.e.id === e.id ? null : { e, anchor: el }))} onResize={() => {}} onMove={() => {}} />

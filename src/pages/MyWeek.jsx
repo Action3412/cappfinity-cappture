@@ -10,18 +10,13 @@ import Hint from '../components/Hint.jsx'
 import WeekPicker from '../components/WeekPicker.jsx'
 import Empty from '../components/Empty.jsx'
 import Tour, { tourSeen } from '../components/Tour.jsx'
+import useNarrow from '../lib/useNarrow.js'
 import { DayColumn, EntryPopover, TimeGutter, dayRange, startOf, boardTargetAt, showGhost } from '../components/DayBoard.jsx'
 
 const DEFAULT_CHUNKS = [
   { label: '30m', hours: 0.5 }, { label: '1h', hours: 1 }, { label: '2h', hours: 2 },
   { label: '½ day', hours: 3.75 }, { label: 'Full day', hours: 7.5 },
 ]
-
-function useNarrow(px = 720) {
-  const [n, setN] = useState(() => typeof window !== 'undefined' && window.matchMedia(`(max-width: ${px}px)`).matches)
-  useEffect(() => { const mq = window.matchMedia(`(max-width: ${px}px)`); const h = (e) => setN(e.matches); mq.addEventListener('change', h); return () => mq.removeEventListener('change', h) }, [px])
-  return n
-}
 
 export default function MyWeek() {
   const { user, profile, weeklyTarget, settings } = useAuth()

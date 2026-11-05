@@ -254,6 +254,7 @@ function suggestCode(client, name) {
 }
 
 function AllocateModal({ project, people, allocs, onClose, flash }) {
+  useEffect(() => { const k = (e) => e.key === 'Escape' && onClose(); document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k) }, [onClose])
   const [rows, setRows] = useState(() => people.map((u) => {
     const a = allocs.find((x) => x.profile_id === u.id)
     return { ...u, on: !!a, hours: a?.hours ?? '' }
