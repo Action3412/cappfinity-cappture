@@ -28,7 +28,7 @@ export default function Shell({ children }) {
     e.preventDefault()
     if (pw.length < 10) { setPwMsg('Use at least 10 characters.'); return }
     const { error } = await supabase.auth.updateUser({ password: pw })
-    setPwMsg(error ? error.message : 'Password set — you can sign in with it next time.')
+    setPwMsg(error ? error.message : 'Password set. You can sign in with it next time.')
     if (!error) setPw('')
   }
   async function saveName(e) {

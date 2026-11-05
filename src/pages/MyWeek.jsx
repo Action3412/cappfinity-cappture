@@ -6,6 +6,7 @@ import { weekStart, weekDays, addDays, today, dayName, shortDate, weekLabel, fmt
 import { fetchProjects, fetchWorkTypes, fetchMyAllocations, fetchMyProjectTotals, fetchWeekEntries, fetchPendingSuggestions, insertEntry, updateEntry, deleteEntry } from '../lib/data.js'
 import Ring from '../components/Ring.jsx'
 import { ChevronL, ChevronR, Repeat, Search, Plus, Pencil, Calendar, Check, Info } from '../components/Icons.jsx'
+import Hint from '../components/Hint.jsx'
 
 const DEFAULT_CHUNKS = [
   { label: '30m', hours: 0.5 }, { label: '1h', hours: 1 }, { label: '2h', hours: 2 },
@@ -137,6 +138,7 @@ export default function MyWeek() {
       <div className="row between wrap" style={{ marginBottom: 18, gap: 12 }}>
         <div className="row" style={{ gap: 12 }}>
           <h1>My week</h1>
+          <Hint title="How this works" text="Drag a project from the left onto a day, or click it to add it to today. Pick how long, pick what kind of work, save. Do that until the ring on the right fills up and you're done for the week." />
           <div className="row" style={{ gap: 2 }}>
             <button className="btn sm ghost" aria-label="Previous week" onClick={() => nav(`/week/${addDays(ws, -7)}`)}><ChevronL /></button>
             <span style={{ fontWeight: 600, padding: '0 6px' }}>{weekLabel(ws)}</span>
@@ -146,8 +148,8 @@ export default function MyWeek() {
         </div>
         <div className="row" style={{ gap: 10 }}>
           {!loading && remaining > 0 && <span className="banner warn"><Info /> {fmtHours(remaining)} still to log this week</span>}
-          {!loading && remaining === 0 && <span className="banner ok"><Check /> Week complete — nice one</span>}
-          <button className="btn" onClick={repeatLastWeek}><Repeat /> Repeat last week</button>
+          {!loading && remaining === 0 && <span className="banner ok"><Check /> Week complete, nice one</span>}
+          <span className="row" style={{ gap: 6 }}><button className="btn" onClick={repeatLastWeek}><Repeat /> Repeat last week</button><Hint align="right" title="Repeat last week" text="Copies last week's entries into this week, same days, same hours, same work types, so you only have to tweak what changed. It skips anything that would be a duplicate and ignores archived projects." /></span>
         </div>
       </div>
 
@@ -156,7 +158,7 @@ export default function MyWeek() {
       <div className="week-layout">
         {/* Projects */}
         <aside className="week-side col" style={{ gap: 12 }}>
-          <div className="row between"><h2>My projects</h2><span className="tiny muted">Drag onto a day</span></div>
+          <div className="row between"><span className="row" style={{ gap: 6 }}><h2>My projects</h2><Hint title="My projects" text="Every live project you can log time to. Ones you've been allocated hours on come first, then ones you've used recently, then the rest. Internal work like pitches, admin and leave sits at the bottom. Can't see a project? Ask an admin to add it." /></span><span className="tiny muted">Drag onto a day</span></div>
           <label className="search"><Search style={{ color: 'var(--muted)' }} /><span className="sr">Search projects</span>
             <input type="search" placeholder="Search client or project…" value={query} onChange={(e) => setQuery(e.target.value)} />
           </label>
@@ -180,7 +182,7 @@ export default function MyWeek() {
                     {alloc > 0 && (
                       <div className="col" style={{ gap: 4 }}>
                         <div className="bar" style={{ height: 4 }}><div style={{ width: `${pct}%`, background: overB ? 'var(--bad)' : pct >= 90 ? 'var(--gold)' : p.colour }} /></div>
-                        <div className="row between tiny muted"><span>{fmtHours(used)} of {alloc}h</span><span>{overB ? `${fmtHours(used - alloc)} over` : `${fmtHours(alloc - used)} left`}</span></div>
+                        <div className="row between tiny muted"><span className="row" style={{ gap: 4 }}>{fmtHours(used)} of {alloc}h<Hint size={12} title="Your allocation" text="The hours you've been given on this project and how many you've used so far, across all weeks. It turns gold at 90% and red if you go over. Going over doesn't stop you logging, it just flags it to whoever's running the project." /></span><span>{overB ? `${fmtHours(used - alloc)} over` : `${fmtHours(alloc - used)} left`}</span></div>
                       </div>
                     )}
                   </div>
@@ -188,7 +190,7 @@ export default function MyWeek() {
               })}
             </div>
           ))}
-          {!loading && projects.length === 0 && <div className="note info">No projects yet. An admin adds them under Admin → Client projects.</div>}
+          {!loading && projects.length === 0 && <div className="note info">No projects yet. An admin adds them under Admin, Client projects.</div>}
         </aside>
 
         {/* Week board */}
@@ -202,7 +204,7 @@ export default function MyWeek() {
                   onDragOver={(ev) => { ev.preventDefault(); if (over !== d) setOver(d) }} onDragLeave={() => over === d && setOver(null)} onDrop={onDrop(d)}>
                   <div className="row between" style={{ padding: '2px 6px' }}>
                     <div className="row" style={{ gap: 6, alignItems: 'baseline' }}><b>{dayName(d)}</b><span className="small muted">{shortDate(d)}</span></div>
-                    <span className="small" style={{ fontWeight: 600, color: tot >= dayHours ? 'var(--ok)' : tot > 0 ? 'var(--muted)' : '#B5B5BE' }}>{fmtHours(tot)}</span>
+                    <span className="small row" style={{ gap: 4, fontWeight: 600, color: tot >= dayHours ? 'var(--ok)' : tot > 0 ? 'var(--muted)' : '#B5B5BE' }}>{fmtHours(tot)}{d === days[0] && <Hint size={12} align="right" title="Day total" text={`Hours logged on this day. It goes green once you reach a full working day (${dayHours}h). You can log more than that if you really did work it.`} />}</span>
                   </div>
                   {list.map((e) => (
                     <EntryCard key={e.id} e={e} project={projById[e.project_id]} workType={wtById[e.work_type_id]} workTypes={workTypes} chunks={chunks}
@@ -223,8 +225,9 @@ export default function MyWeek() {
               <b>{fmtHours(weekTotal).replace(/h$/, '')}</b>
               <span className="small" style={{ opacity: .7 }}>of {weeklyTarget} hrs</span>
             </Ring>
-            <div style={{ fontWeight: 600, textAlign: 'center' }}>
-              {remaining > 0 ? `${fmtHours(remaining)} to go this week` : weekTotal > weeklyTarget ? `${fmtHours(weekTotal - weeklyTarget)} over — all logged` : `All ${weeklyTarget} hours logged`}
+            <div style={{ fontWeight: 600, textAlign: 'center' }} className="row">
+              <Hint align="center" title="Your week" text="Everything you've logged this week against your target (normally 37.5 hours). Billable is time on client projects. Internal is pitches, admin, learning, leave and so on. Both count towards the target, so a week off still adds up to 37.5." />
+              {remaining > 0 ? `${fmtHours(remaining)} to go this week` : weekTotal > weeklyTarget ? `${fmtHours(weekTotal - weeklyTarget)} over, all logged` : `All ${weeklyTarget} hours logged`}
             </div>
             <div className="stat-grid">
               <div className="col" style={{ gap: 2 }}><span className="tiny" style={{ opacity: .7 }}>Billable</span><b style={{ color: 'var(--gold)' }}>{fmtHours(billable)}</b></div>
@@ -234,8 +237,8 @@ export default function MyWeek() {
 
           {suggestions.length > 0 && (
             <div className="panel panel-b col" style={{ gap: 10 }}>
-              <div className="row between"><div className="row"><Calendar style={{ color: 'var(--blue)' }} /><h2>From your Outlook</h2></div><span className="small muted">{suggestions.length} to review</span></div>
-              <p className="small muted" style={{ margin: 0 }}>Meetings matched to a project. Accept to log them, or dismiss.</p>
+              <div className="row between"><div className="row"><Calendar style={{ color: 'var(--blue)' }} /><h2>From your Outlook</h2><Hint title="From your Outlook" text="Meetings in your calendar that look like they belong to a project, matched on the project code in the subject or who was invited. Nothing is logged until you say so. Dismiss anything that's wrong." /></div><span className="small muted">{suggestions.length} to review</span></div>
+              <p className="small muted" style={{ margin: 0 }}>Meetings we've matched to a project. Log them with one click, or dismiss.</p>
               {suggestions.map((s) => {
                 const p = projById[s.matched_project_id]
                 return (
@@ -319,14 +322,14 @@ function EntryCard({ e, project, workType, workTypes, chunks, onEdit, onChange, 
         {e.editing && (
           <div className="col" style={{ gap: 10, paddingTop: 4 }}>
             <div className="col" style={{ gap: 6 }}>
-              <span className="label">How long</span>
+              <span className="label">How long<Hint size={12} title="How long" text="Tap a pill for the common chunks, or type anything in the box: 3h 20m, 3:20, 200m and 3.33 all work. A half day is 3.75h and a full day is 7.5h." /></span>
               <div className="row wrap" style={{ gap: 6 }}>
                 {chunks.map((c) => <button key={c.label} type="button" className={`pill ${Number(c.hours) === e.hours ? 'on' : ''}`} onClick={() => onChange({ hours: Number(c.hours) })}>{c.label}</button>)}
                 <DurationInput hours={e.hours} isChunk={isChunk} onChange={(h) => onChange({ hours: h })} />
               </div>
             </div>
             <div className="col" style={{ gap: 6 }}>
-              <span className="label">What kind of work</span>
+              <span className="label">What kind of work<Hint size={12} title="Work type" text="Roughly what you were doing, so reports can show where the time goes. Pick the closest fit. Admins can add or rename these." /></span>
               <div className="row wrap" style={{ gap: 6 }}>
                 {workTypes.map((w) => <button key={w.id} type="button" className={`pill ${w.id === e.work_type_id ? 'on violet' : ''}`} onClick={() => onChange({ work_type_id: w.id })}>{w.name}</button>)}
               </div>

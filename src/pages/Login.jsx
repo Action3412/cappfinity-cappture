@@ -26,7 +26,7 @@ export default function Login() {
     setBusy(true); setErr('')
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
     setBusy(false)
-    if (error) setErr(error.message === 'Invalid login credentials' ? "That email and password don't match. If you haven't set a password yet, use the email link and set one from the menu." : error.message)
+    if (error) setErr(error.message === 'Invalid login credentials' ? "That email and password don't match. If you haven't set a password yet, ask an admin for a temporary one." : error.message)
   }
 
   async function microsoft() {
@@ -49,8 +49,8 @@ export default function Login() {
 
         {sent ? (
           <div className="col" style={{ gap: 10 }}>
-            <div className="banner ok" style={{ display: 'flex' }}>Check your inbox — we've sent a sign-in link to {email}.</div>
-            <p className="small muted" style={{ margin: 0, lineHeight: 1.5 }}>Open it on this device if you can. Once you're in, set a password from the menu under your name so you can skip the email next time.</p>
+            <div className="banner ok" style={{ display: 'flex' }}>Check your inbox. We've sent a sign-in link to {email}.</div>
+            <p className="small muted" style={{ margin: 0, lineHeight: 1.5 }}>Once you're in, set a password from the menu under your name so you can skip the email next time.</p>
             <button className="btn ghost sm" onClick={() => setSent(false)}>Use a different email</button>
           </div>
         ) : (

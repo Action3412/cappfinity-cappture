@@ -115,7 +115,7 @@ function Projects() {
           <label className="field">Billable<select className="select" value={form.billable ? 'yes' : 'no'} onChange={(e) => setForm({ ...form, billable: e.target.value === 'yes' })}><option value="yes">Billable</option><option value="no">Non-billable</option></select></label>
           <button className="btn primary" type="submit" style={{ height: 38 }}>Add project</button>
         </form>
-        <span className="small muted">Type a new client name and it's created on the spot. The code is what people can put in Outlook meeting subjects so meetings auto-match later — short and memorable.</span>
+        <span className="small muted">Type a new client name and it gets created on the spot. Keep the code short and memorable. It's what people can put in Outlook meeting subjects so meetings match up automatically later on.</span>
       </section>
 
       <section className="panel" style={{ overflow: 'hidden' }}>
@@ -141,7 +141,7 @@ function Projects() {
                   </tr>
                 )
               })}
-              {!list.length && <tr><td colSpan="7" className="center">No projects yet — add the first one above.</td></tr>}
+              {!list.length && <tr><td colSpan="7" className="center">No projects yet. Add the first one above.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -176,7 +176,7 @@ function AllocateModal({ project, people, allocs, onClose, flash }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(38,38,38,.45)', display: 'grid', placeItems: 'center', zIndex: 40, padding: 20 }} onClick={onClose}>
       <div className="panel col" style={{ width: '100%', maxWidth: 560, maxHeight: '85vh', gap: 0 }} onClick={(e) => e.stopPropagation()}>
-        <div className="panel-h"><div className="col" style={{ gap: 2 }}><h2>Allocate hours — {project.name}</h2><span className="small muted">Budget {project.budget_hours}h · allocated {total}h {project.budget_hours && total > project.budget_hours ? '· over budget' : ''}</span></div><button className="icon-btn" aria-label="Close" onClick={onClose}><X /></button></div>
+        <div className="panel-h"><div className="col" style={{ gap: 2 }}><h2>Allocate hours: {project.name}</h2><span className="small muted">Budget {project.budget_hours}h · allocated {total}h {project.budget_hours && total > project.budget_hours ? '(over budget)' : ''}</span></div><button className="icon-btn" aria-label="Close" onClick={onClose}><X /></button></div>
         <div className="panel-b col" style={{ gap: 10, overflow: 'auto' }}>
           <input className="input" placeholder="Find a person…" value={q} onChange={(e) => setQ(e.target.value)} />
           {visible.map((r) => (
@@ -189,7 +189,7 @@ function AllocateModal({ project, people, allocs, onClose, flash }) {
           ))}
           {!people.length && <span className="small muted">No active people yet.</span>}
         </div>
-        <div className="row between" style={{ padding: '12px 18px', borderTop: '1px solid var(--line-soft)' }}><span className="small muted">Leave at 0 to remove someone. People without an allocation can still log time to the project.</span><button className="btn primary" onClick={save}>Save</button></div>
+        <div className="row between" style={{ padding: '12px 18px', borderTop: '1px solid var(--line-soft)' }}><span className="small muted">Set someone to 0 to take them off. People without an allocation can still log time to the project.</span><button className="btn primary" onClick={save}>Save</button></div>
       </div>
     </div>
   )
@@ -232,7 +232,7 @@ function WorkTypes() {
   return (
     <>
       <section className="panel panel-b col" style={{ gap: 14 }}>
-        <div className="col" style={{ gap: 4 }}><h2>Work types</h2><span className="small muted">The pills people tap when logging time. Keep it to eight or fewer so they fit on one row.</span></div>
+        <div className="col" style={{ gap: 4 }}><h2>Work types</h2><span className="small muted">These are the pills people tap when logging time. Keep it to eight or fewer so they fit on one row.</span></div>
         <div className="row wrap" style={{ gap: 8 }}>
           {active.map((t, i) => (
             <span key={t.id} className="row" style={{ height: 36, padding: '0 6px 0 14px', borderRadius: 999, border: '1.5px solid var(--line)', background: '#fff', fontSize: 13, fontWeight: 600, gap: 8 }}>
@@ -246,12 +246,12 @@ function WorkTypes() {
         </div>
         <form onSubmit={add} className="row" style={{ maxWidth: 420 }}><input className="input" placeholder="New work type, e.g. Facilitation" value={name} onChange={(e) => setName(e.target.value)} /><button className="btn primary" type="submit" style={{ height: 38 }}>Add</button></form>
         {hidden.length > 0 && <div className="col" style={{ gap: 6 }}><span className="label">Hidden (history kept)</span><div className="row wrap" style={{ gap: 6 }}>{hidden.map((t) => <button key={t.id} className="pill" onClick={() => setActive(t, true)} title="Restore">{t.name} · restore</button>)}</div></div>}
-        <div className="note">Hiding a type removes it from the picker but keeps every hour already logged against it in reports.</div>
+        <div className="note">Hiding a type takes it out of the picker but every hour already logged against it stays in the reports.</div>
       </section>
       <section className="panel panel-b col" style={{ gap: 10 }}>
-        <h2>Time chunks</h2><span className="small muted">The duration pills. A working day is 7.5h, so ½ day is 3.75h and five full days make the week. Anything else goes in the custom box.</span>
+        <h2>Time chunks<Hint title="Time chunks" text="The quick-pick buttons on each entry. Most time fits one of these. Anything that doesn't can be typed in, so you don't need a chunk for every possibility." /></h2><span className="small muted">These are the duration pills. A working day is 7.5h, so a half day is 3.75h and five full days make the week. Anything else can be typed into the box next to them.</span>
         <div className="row wrap" style={{ gap: 8 }}>{chunks.map((c) => <span key={c.label} className="pill" style={{ cursor: 'default', display: 'inline-flex', alignItems: 'center' }}>{c.label} · {c.hours}h</span>)}</div>
-        <span className="tiny muted">Edit these under Week &amp; reminders if the working day ever changes.</span>
+        <span className="tiny muted">You can edit these under Week &amp; reminders if the working day ever changes.</span>
       </section>
       {toast && <div className="toast">{toast}</div>}
     </>
@@ -305,20 +305,20 @@ function People() {
   return (
     <>
       <section className="panel panel-b col" style={{ gap: 12 }}>
-        <h2>Invite someone</h2>
+        <h2>Invite someone<Hint title="Inviting people" text="Add someone's work email, team and role and they'll be set up the moment they first sign in. Member: logs their own time. Manager: also sees Reports for their team and can send reminders. Admin: everything, including this page." /></h2>
         <form onSubmit={sendInvite} className="form-grid" style={{ gridTemplateColumns: 'minmax(200px, 2fr) minmax(140px, 1fr) minmax(120px, 1fr) auto' }}>
           <label className="field">Work email<input className="input" type="email" required placeholder="name@cappfinity.com" value={inv.email} onChange={(e) => setInv({ ...inv, email: e.target.value })} /></label>
           <label className="field">Team<select className="select" value={inv.team_id} onChange={(e) => setInv({ ...inv, team_id: e.target.value })}><option value="">No team yet</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
           <label className="field">Role<select className="select" value={inv.role} onChange={(e) => setInv({ ...inv, role: e.target.value })}><option value="member">Member</option><option value="manager">Manager</option><option value="admin">Admin</option></select></label>
           <button className="btn primary" type="submit" style={{ height: 38 }}>Send invite</button>
         </form>
-        <span className="small muted">They get a sign-in link by email and land straight in their week with the right team and role. Anyone with a cappfinity.com address can also just sign in and will arrive as a member. Managers see their team's time; admins see everything.</span>
+        <span className="small muted">They get a sign-in email and land straight in their week with the right team and role. Anyone with a cappfinity.com address can also just sign in and will arrive as a member. Managers see their team's time, admins see everything.</span>
         {invites.length > 0 && <div className="col" style={{ gap: 4 }}><span className="label">Waiting to sign in</span>{invites.map((i) => <div className="row between small" key={i.id} style={{ borderBottom: '1px dotted var(--line)', padding: '6px 0' }}><span>{i.email} <span className="muted">· {i.role}</span></span><button className="btn sm ghost danger" onClick={() => cancelInvite(i)}>Cancel</button></div>)}</div>}
       </section>
 
       {pending.length > 0 && (
         <section className="panel panel-b col" style={{ gap: 8, borderColor: 'var(--gold)' }}>
-          <h2>Waiting for approval</h2><span className="small muted">Signed in from an address outside the allowed domains. Approve to let them in, or remove.</span>
+          <h2>Waiting for approval</h2><span className="small muted">These people signed in from an address outside the allowed domains. Approve them to let them in.</span>
           {pending.map((u) => <div className="row between" key={u.id} style={{ padding: '6px 0', borderBottom: '1px dotted var(--line)' }}><span className="small"><b>{u.full_name}</b> · {u.email}</span><div className="row"><button className="btn sm primary" onClick={() => patch(u, { active: true })}>Approve</button></div></div>)}
         </section>
       )}
@@ -327,7 +327,7 @@ function People() {
         <div className="panel-h"><h2>People</h2><div className="row"><input className="input" placeholder="Find…" value={q} onChange={(e) => setQ(e.target.value)} style={{ height: 32, width: 180 }} /><span className="small muted">{people.filter((u) => u.active).length} active</span></div></div>
         <div className="scroll-x">
           <table className="tbl" style={{ minWidth: 820 }}>
-            <thead><tr><th>Name</th><th>Team</th><th>Role</th><th className="num">Target</th><th className="num">Last week</th><th>Status</th><th /></tr></thead>
+            <thead><tr><th>Name</th><th><span className="row" style={{ gap: 4 }}>Team<Hint title="Team" text="Which team someone sits in. Managers see Reports for their own team, and you can filter Reports by team." /></span></th><th><span className="row" style={{ gap: 4 }}>Role<Hint title="Role" text="Member: logs their own time. Manager: also sees their team's time in Reports and can chase people. Admin: can do everything, including add projects and people. You can't change your own role, to stop you locking yourself out." /></span></th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Target<Hint align="right" title="Weekly target" text="Hours this person is expected to log each week. 37.5 for full time. Set it lower for part-timers so they aren't flagged as short every week." /></span></th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Last week<Hint align="right" title="Last week" text="Whether they hit their target last week, and if not, by how much." /></span></th><th><span className="row" style={{ gap: 4 }}>Status<Hint title="Outlook" text="Whether they've connected their Outlook calendar so meetings can be suggested automatically. This switches on with the Microsoft sign-in phase." /></span></th><th /></tr></thead>
             <tbody>
               {list.filter((u) => u.active).map((u) => {
                 const lw = weeks[u.id]
@@ -349,7 +349,7 @@ function People() {
       </section>
 
       <section className="panel panel-b col" style={{ gap: 10 }}>
-        <h2>Teams</h2>
+        <h2>Teams<Hint title="Teams" text="Just the list of teams people can belong to. The number is how many active people are in each." /></h2>
         <div className="row wrap" style={{ gap: 6 }}>{teams.map((t) => <span key={t.id} className="pill" style={{ cursor: 'default', display: 'inline-flex', alignItems: 'center' }}>{t.name} <span className="tiny muted" style={{ marginLeft: 6 }}>{people.filter((u) => u.active && u.team_id === t.id).length}</span></span>)}</div>
         <form onSubmit={addTeam} className="row" style={{ maxWidth: 380 }}><input className="input" placeholder="New team name" value={newTeam} onChange={(e) => setNewTeam(e.target.value)} /><button className="btn" type="submit" style={{ height: 38 }}>Add team</button></form>
       </section>
@@ -376,30 +376,30 @@ function Settings() {
   return (
     <>
       <section className="panel panel-b col" style={{ gap: 14 }}>
-        <h2>Working week</h2>
+        <h2>Working week<Hint title="Working week" text="Company-wide defaults. The weekly target is what the ring on My week fills towards and what people get chased against. Hours in a day sets when a day column turns green and what a full day pill means. Allowed domains are email domains that can sign in without an invite." /></h2>
         <div className="form-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
           <label className="field">Default hours per week<input className="input" type="number" step="0.5" defaultValue={s.weekly_target_hours} onBlur={(e) => save('weekly_target_hours', Number(e.target.value))} /></label>
           <label className="field">Hours in a working day<input className="input" type="number" step="0.25" defaultValue={s.day_hours} onBlur={(e) => save('day_hours', Number(e.target.value))} /></label>
           <label className="field">Allowed sign-in domains<input className="input" defaultValue={domains} placeholder="cappfinity.com" onBlur={(e) => save('allowed_email_domains', e.target.value.split(',').map((x) => x.trim().toLowerCase()).filter(Boolean))} /></label>
         </div>
-        <span className="small muted">Individual targets (part-timers, for example) are set per person under People and override the default.</span>
+        <span className="small muted">Individual targets, for part-timers say, are set per person under People and override this default.</span>
       </section>
 
       <section className="panel panel-b col" style={{ gap: 10 }}>
-        <h2>Time chunks</h2>
+        <h2>Time chunks<Hint title="Time chunks" text="The quick-pick buttons on each entry. Most time fits one of these. Anything that doesn't can be typed in, so you don't need a chunk for every possibility." /></h2>
         <span className="small muted">Label and hours for each duration pill, in the order they appear.</span>
         <ChunkEditor chunks={chunks} onSave={(c) => save('duration_chunks', c)} />
       </section>
 
       <section className="panel panel-b col" style={{ gap: 14 }}>
-        <h2>Reminders</h2>
+        <h2>Reminders<Hint title="Reminders" text="The Friday nudge goes to anyone who's still short on Friday afternoon. The Monday chase goes to anyone who finished last week short. Turn on approval if you want managers to sign off each week before it counts." /></h2>
         <div className="form-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
           <label className="field">Friday nudge<select className="select" defaultValue={s.friday_nudge_time} onChange={(e) => save('friday_nudge_time', e.target.value)}><option>14:00</option><option>15:00</option><option>16:00</option><option value="off">Off</option></select></label>
           <label className="field">Monday chase for last week<select className="select" defaultValue={s.monday_chase_time} onChange={(e) => save('monday_chase_time', e.target.value)}><option>08:00</option><option>09:00</option><option>12:00</option><option value="off">Off</option></select></label>
         </div>
         <label className="checkbox"><input type="checkbox" checked={!!s.cc_manager_on_chase} onChange={(e) => save('cc_manager_on_chase', e.target.checked)} /> Copy the person's manager on the Monday chase</label>
         <label className="checkbox"><input type="checkbox" checked={!!s.require_approval} onChange={(e) => save('require_approval', e.target.checked)} /> Require weekly submission and manager approval <span className="small muted">(honour system while off)</span></label>
-        <div className="note info">Email delivery for these reminders is wired up in the next phase alongside the Outlook calendar sync — the settings are saved now so nothing needs redoing.</div>
+        <div className="note info">Email delivery for these reminders is coming in the next phase, alongside the Outlook calendar sync. The settings are saved now so nothing needs redoing later.</div>
       </section>
       {toast && <div className="toast">{toast}</div>}
     </>

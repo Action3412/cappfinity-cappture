@@ -5,6 +5,7 @@ import { today, weekStart, addDays, monthRange, quarterRange, fmtHours, longDate
 import { downloadCSV } from '../lib/data.js'
 import { initials } from '../components/Shell.jsx'
 import { ChevronR, Download } from '../components/Icons.jsx'
+import Hint from '../components/Hint.jsx'
 
 const AVATARS = ['#FDE9A8', '#D8CFFE', '#FED3FB', '#C9D6FD', '#DDEFE5', '#F6D5C9']
 const av = (n = '') => AVATARS[[...n].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATARS.length]
@@ -113,7 +114,7 @@ export default function Reports() {
     const { error } = await supabase.from('reminder_log').insert({ profile_id: s.profile_id, week_start: lastWeek, kind: 'manual', sent_by: profile.id })
     if (error) { flash(error.message); return }
     setShortfalls((x) => x.map((y) => (y.profile_id === s.profile_id ? { ...y, reminded_at: new Date().toISOString() } : y)))
-    flash('Reminder noted — automatic emails switch on with the Outlook phase')
+    flash('Reminder noted. Automatic emails switch on with the Outlook phase')
   }
   async function remindAll() {
     const pending = shortfalls.filter((s) => !s.reminded_at)
@@ -131,7 +132,7 @@ export default function Reports() {
   return (
     <div className="page col" style={{ gap: 18 }}>
       <div className="row between wrap" style={{ alignItems: 'flex-end', gap: 14 }}>
-        <div className="col" style={{ gap: 4 }}><h1>Allocated vs actual</h1><span className="small muted">{scopeLabel}</span></div>
+        <div className="col" style={{ gap: 4 }}><span className="row" style={{ gap: 8 }}><h1>Allocated vs actual</h1><Hint title="Reports" text="Who spent how long on what. Use the filters to narrow it down by date, client, team, person or work type. Every number on this page updates to match. Export CSV gives you the raw entries behind whatever you're looking at, ready for Excel." /></span><span className="small muted">{scopeLabel}</span></div>
         <div className="row wrap" style={{ gap: 8, alignItems: 'flex-end' }}>
           <label className="field">Period
             <select className="select" style={sel} value={period} onChange={(e) => setPeriod(e.target.value)}>
@@ -151,18 +152,18 @@ export default function Reports() {
       </div>
 
       <div className="kpis">
-        <div className="kpi dark"><span className="small" style={{ opacity: .7 }}>Hours logged</span><b>{fmtHours(totalLogged)}</b><span className="small" style={{ opacity: .7 }}>{fmtHours(billable)} billable · {scoped.length} entries</span></div>
-        <div className="kpi"><span className="small muted">Billable share</span><b>{totalLogged ? Math.round((billable / totalLogged) * 100) : 0}%</b><div className="bar"><div style={{ width: `${totalLogged ? Math.round((billable / totalLogged) * 100) : 0}%`, background: 'var(--spectrum)' }} /></div></div>
-        <div className="kpi"><span className="small muted">Budget used <span className="tiny">(project to date)</span></span><b>{budgetAlloc ? `${Math.round((budgetUsed / budgetAlloc) * 100)}%` : '—'}</b><span className="small muted">{budgetAlloc ? `${fmtHours(budgetUsed)} of ${budgetAlloc}h across ${budgetInScope.length} budgeted ${budgetInScope.length === 1 ? 'project' : 'projects'}` : 'no budgeted projects in scope'}</span></div>
-        <div className="kpi"><span className="small muted">Short of target last week</span><b style={{ color: shortfalls.length ? 'var(--bad)' : 'var(--ok)' }}>{shortfalls.length}</b><span className="small muted">{isAdmin ? 'across everyone' : 'in your team'} · week of {longDate(lastWeek)}</span></div>
+        <div className="kpi dark"><span className="small" style={{ opacity: .7 }}>Hours logged<Hint title="Hours logged" text="Total hours in the current filters, with the billable share underneath. Billable means time on client projects rather than internal ones." /></span><b>{fmtHours(totalLogged)}</b><span className="small" style={{ opacity: .7 }}>{fmtHours(billable)} billable · {scoped.length} entries</span></div>
+        <div className="kpi"><span className="small muted">Billable share<Hint title="Billable share" text="The percentage of logged hours that went on client work. A useful health check for a team or a person: low means a lot of pitching, admin or leave in the period." /></span><b>{totalLogged ? Math.round((billable / totalLogged) * 100) : 0}%</b><div className="bar"><div style={{ width: `${totalLogged ? Math.round((billable / totalLogged) * 100) : 0}%`, background: 'var(--spectrum)' }} /></div></div>
+        <div className="kpi"><span className="small muted">Budget used <span className="tiny">(project to date)</span><Hint title="Budget used" text="For projects that have a budget, how much of it has been used so far. This one always looks at the whole life of each project, not just the dates you've filtered to, because a budget is a total not a monthly figure." /></span><b>{budgetAlloc ? `${Math.round((budgetUsed / budgetAlloc) * 100)}%` : '—'}</b><span className="small muted">{budgetAlloc ? `${fmtHours(budgetUsed)} of ${budgetAlloc}h across ${budgetInScope.length} budgeted ${budgetInScope.length === 1 ? 'project' : 'projects'}` : 'no budgeted projects in scope'}</span></div>
+        <div className="kpi"><span className="small muted">Short of target last week<Hint align="right" title="Short of target" text="People who logged less than their weekly target (normally 37.5h) last week. The full list, with a Remind button for each, is further down the page." /></span><b style={{ color: shortfalls.length ? 'var(--bad)' : 'var(--ok)' }}>{shortfalls.length}</b><span className="small muted">{isAdmin ? 'across everyone' : 'in your team'} · week of {longDate(lastWeek)}</span></div>
       </div>
 
       <div className="row wrap" style={{ gap: 18, alignItems: 'flex-start' }}>
         <section className="panel" style={{ flex: '999 1 600px', minWidth: 0, overflow: 'hidden' }}>
-          <div className="panel-h"><h2>By client and project</h2><div className="row"><span className="small muted">Click a project to see who logged what</span>{isAdmin && <button className="btn sm" onClick={() => setShowRates((s) => !s)}>{showRates ? 'Hide' : 'Show'} rates</button>}</div></div>
+          <div className="panel-h"><h2>By client and project<Hint title="By client and project" text="Grouped by client, then project. Click a project row to open it up and see each person's hours split by work type. Download this project gives you just that project's entries as a CSV." /></h2><div className="row"><span className="small muted">Click a project to see who logged what</span>{isAdmin && <span className="row" style={{ gap: 4 }}><button className="btn sm" onClick={() => setShowRates((s) => !s)}>{showRates ? 'Hide' : 'Show'} rates</button><Hint align="right" title="Rates" text="Adds a rate column to the people breakdown so you can see cost or value against hours. Admins only. Rates aren't set up yet, so it shows 'not set' for now." /></span>}</div></div>
           <div className="scroll-x">
             <table className="tbl" style={{ minWidth: 760 }}>
-              <thead><tr><th>Project</th><th className="num">Allocated</th><th className="num">Logged</th><th style={{ width: '22%' }}>Progress (to date)</th><th className="num">People</th><th className="num">Status</th></tr></thead>
+              <thead><tr><th>Project</th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Allocated<Hint align="right" title="Allocated" text="The project's total hours budget, set by an admin. A dash means the project has no budget, which is normal for internal work." /></span></th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Logged<Hint align="right" title="Logged" text="Hours logged against the project within your current filters." /></span></th><th style={{ width: '22%' }}><span className="row" style={{ gap: 4 }}>Progress (to date)<Hint title="Progress" text="How much of the budget has been used over the whole life of the project, regardless of the date filter. Gold from 90%, red once it's over." /></span></th><th className="num">People</th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Status<Hint align="right" title="Status" text="On track: under 90% of budget used. Nearly out: 90% or more. Over: more hours logged than budgeted. Unbudgeted: no budget set, so nothing to compare against." /></span></th></tr></thead>
               <tbody>
                 {loading && <tr><td colSpan="6" className="center">Loading…</td></tr>}
                 {!loading && tree.length === 0 && <tr><td colSpan="6" className="center">No time logged in this range.</td></tr>}
@@ -176,7 +177,7 @@ export default function Reports() {
 
         <aside className="col" style={{ flex: '1 1 300px', maxWidth: 380, gap: 14 }}>
           <div className="panel panel-b col" style={{ gap: 10 }}>
-            <h2>Where the time went</h2><span className="small muted">By work type in this scope</span>
+            <h2>Where the time went<Hint title="Where the time went" text="Hours by work type within the current filters. Handy for spotting if a project is all meetings and no delivery, or if QA is getting squeezed." /></h2><span className="small muted">By work type in this scope</span>
             {mix.map((m) => (
               <div className="col" style={{ gap: 4 }} key={m.k}>
                 <div className="row between small"><b>{m.k}</b><span className="muted">{fmtHours(m.v)} · {totalLogged ? Math.round((m.v / totalLogged) * 100) : 0}%</span></div>
@@ -187,8 +188,8 @@ export default function Reports() {
           </div>
 
           <div className="panel panel-b col" style={{ gap: 10 }}>
-            <div className="row between"><h2>Short of target last week</h2>{shortfalls.some((s) => !s.reminded_at) && <button className="btn sm primary" onClick={remindAll}>Remind all</button>}</div>
-            <span className="small muted">Week of {longDate(lastWeek)}. Automatic Friday and Monday emails arrive with the Outlook phase; use this to chase by hand meanwhile.</span>
+            <div className="row between"><h2>Short of target last week<Hint title="Short of target" text="Anyone who logged less than their weekly target last week, with how far short they were. Remind notes that you've chased them so nobody gets nudged twice. Once the Outlook phase is in, the Friday and Monday emails go out automatically." /></h2>{shortfalls.some((s) => !s.reminded_at) && <button className="btn sm primary" onClick={remindAll}>Remind all</button>}</div>
+            <span className="small muted">Week of {longDate(lastWeek)}. Automatic Friday and Monday emails arrive with the Outlook phase. Until then use this to chase by hand.</span>
             {shortfalls.map((s) => (
               <div className="row" key={s.profile_id} style={{ padding: '8px 0', borderBottom: '1px dotted var(--line)', gap: 10 }}>
                 <span className="avatar sm" style={{ background: av(s.person || s.email) }}>{initials(s.person || s.email)}</span>
@@ -197,7 +198,7 @@ export default function Reports() {
                 {s.reminded_at ? <span className="tag ok">Reminded</span> : <button className="btn sm" onClick={() => remind(s)}>Remind</button>}
               </div>
             ))}
-            {!shortfalls.length && !loading && <div className="note info">Everyone hit their target. 🎉</div>}
+            {!shortfalls.length && !loading && <div className="note info">Everyone hit their target.</div>}
           </div>
         </aside>
       </div>
