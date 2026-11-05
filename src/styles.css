@@ -454,3 +454,8 @@ h1 + .hint { margin-left: 2px; }
 
 /* Page top */
 .week-nav-btn { font-size: 15px; }
+.board .day::before, .board .day::after { z-index: 0; }
+.board .day > * { position: relative; z-index: 1; }
+.board .day > .row.between { padding-top: 12px; }
+.board .day-status { top: 38px; }
+.board .day::before { height: 72px; opacity: .9; }
