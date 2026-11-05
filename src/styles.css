@@ -377,3 +377,8 @@ h1 + .hint { margin-left: 2px; }
 .readout b { color: #fff; }
 .readout .warn { color: #FDB601; } .readout .warn b { color: #FDB601; }
 .readout .ok { color: #7ED9A5; }
+.sort-btn { display: flex; align-items: center; gap: 6px; width: 100%; border: 0; background: transparent; padding: 0; font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+.sort-btn:hover { color: var(--charcoal); }
+.sort-btn.on { color: var(--charcoal); }
+.sort-ico { flex: 0 0 auto; color: var(--muted); }
+.sort-btn.on .sort-ico { color: var(--blue); }

@@ -6,6 +6,7 @@ import { fmtHours, timeAgo, fmtDateTime } from '../lib/time.js'
 import { initials } from '../components/Shell.jsx'
 import { X } from '../components/Icons.jsx'
 import Hint from '../components/Hint.jsx'
+import SortTh, { useSort } from '../components/SortTh.jsx'
 
 const COLOURS = ['#487BFA', '#9275FA', '#FB6CF5', '#FDB601', '#2BB3A3', '#F08A4B', '#5C6BC0', '#26A69A']
 const AVATARS = ['#FDE9A8', '#D8CFFE', '#FED3FB', '#C9D6FD', '#DDEFE5', '#F6D5C9']
@@ -59,6 +60,7 @@ function Projects() {
   const [form, setForm] = useState({ client: '', name: '', code: '', budget: '', billable: true })
   const [allocFor, setAllocFor] = useState(null)
   const [editing, setEditing] = useState(null)
+  const sort = useSort('client')
   const [q, setQ] = useState('')
   const [fClient, setFClient] = useState('all')
   const [fBill, setFBill] = useState('all')
@@ -108,6 +110,14 @@ function Projects() {
     .filter((p) => fBill === 'all' || (fBill === 'yes') === !!p.billable)
     .filter((p) => !q.trim() || `${p.name} ${p.code} ${p.client?.name}`.toLowerCase().includes(q.trim().toLowerCase()))
   const filtering = q.trim() || fClient !== 'all' || fBill !== 'all'
+  const sorted = sort.sortBy(list, {
+    client: (p) => `${p.client?.name || ''} ${p.name}`,
+    project: (p) => p.name,
+    code: (p) => p.code,
+    budget: (p) => Number(p.budget_hours) || 0,
+    allocated: (p) => (allocByProject[p.id] || []).length,
+    status: (p) => p.status,
+  })
   async function saveEdit(p, fields) {
     const patch = { ...fields }
     if (fields.clientName !== undefined) {
@@ -157,9 +167,16 @@ function Projects() {
         </div>
         <div className="scroll-x">
           <table className="tbl" style={{ minWidth: 760 }}>
-            <thead><tr><th>Client</th><th>Project</th><th>Code</th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Budget<Hint align="right" title="Budget" text="Total hours for the project. Edit it here and it saves when you click away." /></span></th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Allocated<Hint align="right" title="Allocated" text="Who's on the project, set with the Team button, and the hours you expect from them if you've given any. Anyone can still log time whether or not they're on it; being on it just puts the project at the top of their list, and an hours estimate gives them a little budget bar to track against." /></span></th><th><span className="row" style={{ gap: 4 }}>Status<Hint title="Status" text="Archiving takes a project off everyone's list so no more time can be logged to it, but keeps every hour already logged in reports and exports. Restore brings it back." /></span></th><th /></tr></thead>
+            <thead><tr>
+              <SortTh k="client" sort={sort}>Client</SortTh>
+              <SortTh k="project" sort={sort}>Project</SortTh>
+              <SortTh k="code" sort={sort}>Code</SortTh>
+              <SortTh k="budget" sort={sort} align="right">Budget<Hint align="right" title="Budget" text="Total hours for the project. Edit it here and it saves when you click away." /></SortTh>
+              <SortTh k="allocated" sort={sort} align="right">Allocated<Hint align="right" title="Allocated" text="Who's on the project, set with the Team button, and the hours you expect from them if you've given any. Anyone can still log time whether or not they're on it; being on it just puts the project at the top of their list, and an hours estimate gives them a little budget bar to track against." /></SortTh>
+              <SortTh k="status" sort={sort}>Status<Hint title="Status" text="Archiving takes a project off everyone's list so no more time can be logged to it, but keeps every hour already logged in reports and exports. Restore brings it back." /></SortTh>
+              <th /></tr></thead>
             <tbody>
-              {list.map((p) => {
+              {sorted.map((p) => {
                 const al = allocByProject[p.id] || []
                 return (
                   <tr key={p.id} className="click" style={{ opacity: p.status === 'archived' ? .55 : 1 }} onClick={() => setEditing(p)} title="Click to edit">
@@ -356,6 +373,7 @@ function People() {
   const [teams, setTeams] = useState([])
   const [weeks, setWeeks] = useState({})
   const [activity, setActivity] = useState({})
+  const psort = useSort('name')
   const [, setTick] = useState(0)
   const [inv, setInv] = useState({ email: '', full_name: '', team_id: '', role: 'member', manager_id: '' })
   const [issued, setIssued] = useState(null) // { name, email, password, kind }
@@ -415,6 +433,16 @@ function People() {
   async function cancelInvite(i) { await supabase.from('invites').delete().eq('id', i.id); load() }
 
   const list = people.filter((u) => !q || `${u.full_name} ${u.email} ${u.teams?.name}`.toLowerCase().includes(q.toLowerCase()))
+  const byId = Object.fromEntries(people.map((u) => [u.id, u]))
+  const activeSorted = psort.sortBy(list.filter((u) => u.active), {
+    name: (u) => u.full_name || u.email,
+    team: (u) => u.teams?.name || '',
+    role: (u) => ({ admin: 0, manager: 1, member: 2 })[u.role],
+    manager: (u) => byId[u.manager_id]?.full_name || '',
+    target: (u) => Number(u.weekly_target),
+    week: (u) => (weeks[u.id] ? Number(weeks[u.id].short) : -1),
+    activity: (u) => activity[u.id]?.last_seen_at || activity[u.id]?.last_sign_in_at || '',
+  })
   const pending = list.filter((u) => !u.active)
   return (
     <>
@@ -459,9 +487,17 @@ function People() {
         <div className="panel-h"><h2>People</h2><div className="row"><input className="input" placeholder="Find…" value={q} onChange={(e) => setQ(e.target.value)} style={{ height: 32, width: 180 }} /><span className="small muted">{people.filter((u) => u.active).length} active</span></div></div>
         <div className="scroll-x">
           <table className="tbl" style={{ minWidth: 1000 }}>
-            <thead><tr><th>Name</th><th><span className="row" style={{ gap: 4 }}>Team<Hint title="Team" text="Which team someone sits in. It's a grouping for Reports (filter by team); who can see whose time is set by Reports to." /></span></th><th><span className="row" style={{ gap: 4 }}>Role<Hint title="Role" text="Member: logs their own time. Manager: also sees the time of people who report to them, in Reports, and can chase them. Admin: can do everything, including add projects and people. You can't change your own role, to stop you locking yourself out." /></span></th><th><span className="row" style={{ gap: 4 }}>Reports to<Hint title="Reports to" text="Their line manager. This decides whose time a manager can see and chase, and who gets copied on the Monday reminder. Only managers and admins appear in the list." /></span></th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Target<Hint align="right" title="Weekly target" text="Hours this person is expected to log each week. 37.5 for full time. Set it lower for part-timers so they aren't flagged as short every week." /></span></th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Last week<Hint align="right" title="Last week" text="Whether they hit their target last week, and if not, by how much." /></span></th><th><span className="row" style={{ gap: 4 }}>Activity<Hint title="Activity" text="A green dot means they have Cappture open right now (seen in the last five minutes). Underneath is when they last signed in. Hover for exact times. Never means they haven't signed in yet." /></span></th><th /></tr></thead>
+            <thead><tr>
+              <SortTh k="name" sort={psort}>Name</SortTh>
+              <SortTh k="team" sort={psort}>Team<Hint title="Team" text="Which team someone sits in. It's a grouping for Reports (filter by team); who can see whose time is set by Reports to." /></SortTh>
+              <SortTh k="role" sort={psort}>Role<Hint title="Role" text="Member: logs their own time. Manager: also sees the time of people who report to them, in Reports, and can chase them. Admin: can do everything, including add projects and people. You can't change your own role, to stop you locking yourself out." /></SortTh>
+              <SortTh k="manager" sort={psort}>Reports to<Hint title="Reports to" text="Their line manager. This decides whose time a manager can see and chase, and who gets copied on the Monday reminder. Only managers and admins appear in the list." /></SortTh>
+              <SortTh k="target" sort={psort} align="right">Target<Hint align="right" title="Weekly target" text="Hours this person is expected to log each week. 37.5 for full time. Set it lower for part-timers so they aren't flagged as short every week." /></SortTh>
+              <SortTh k="week" sort={psort} align="right">Last week<Hint align="right" title="Last week" text="Whether they hit their target last week, and if not, by how much." /></SortTh>
+              <SortTh k="activity" sort={psort}>Activity<Hint title="Activity" text="A green dot means they have Cappture open right now (seen in the last five minutes). Underneath is when they last signed in. Hover for exact times. Never means they haven't signed in yet." /></SortTh>
+              <th /></tr></thead>
             <tbody>
-              {list.filter((u) => u.active).map((u) => {
+              {activeSorted.map((u) => {
                 const lw = weeks[u.id]
                 return (
                   <tr key={u.id}>
