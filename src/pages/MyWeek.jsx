@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth.jsx'
 import { supabase } from '../lib/supabase.js'
-import { weekStart, weekDays, addDays, today, dayName, shortDate, weekLabel, fmtHours } from '../lib/time.js'
+import { weekStart, weekDays, addDays, today, dayName, shortDate, weekLabel, fmtHours, parseDuration } from '../lib/time.js'
 import { fetchProjects, fetchWorkTypes, fetchMyAllocations, fetchMyProjectTotals, fetchWeekEntries, fetchPendingSuggestions, insertEntry, updateEntry, deleteEntry } from '../lib/data.js'
 import Ring from '../components/Ring.jsx'
 import { ChevronL, ChevronR, Repeat, Search, Plus, Pencil, Calendar, Check, Info } from '../components/Icons.jsx'
@@ -268,6 +268,28 @@ export default function MyWeek() {
   )
 }
 
+function DurationInput({ hours, isChunk, onChange }) {
+  const [text, setText] = useState(isChunk || !hours ? '' : fmtHours(hours))
+  const [bad, setBad] = useState(false)
+  useEffect(() => { if (isChunk) { setText(''); setBad(false) } }, [isChunk, hours])
+  function commit(v) {
+    setText(v)
+    if (!v.trim()) { setBad(false); return }
+    const h = parseDuration(v)
+    if (h === null || h <= 0 || h > 24) { setBad(true); return }
+    setBad(false); onChange(h)
+  }
+  return (
+    <span className="row" style={{ gap: 6 }}>
+      <input type="text" inputMode="decimal" aria-label="Other duration, e.g. 3h 20m" placeholder="other, e.g. 3h 20m" className="input"
+        style={{ width: 132, height: 30, padding: '0 10px', borderRadius: 999, borderColor: bad ? 'var(--bad)' : !isChunk && hours ? 'var(--charcoal)' : undefined }}
+        value={text} onChange={(ev) => commit(ev.target.value)} />
+      {!isChunk && hours > 0 && !bad && <span className="tiny muted">= {fmtHours(hours)}</span>}
+      {bad && <span className="tiny" style={{ color: 'var(--bad)' }}>try 3h 20m or 3:20</span>}
+    </span>
+  )
+}
+
 function EntryCard({ e, project, workType, workTypes, chunks, onEdit, onChange, onSave, onRemove }) {
   if (!project) return null
   const isChunk = chunks.some((c) => Number(c.hours) === e.hours)
@@ -300,8 +322,7 @@ function EntryCard({ e, project, workType, workTypes, chunks, onEdit, onChange, 
               <span className="label">How long</span>
               <div className="row wrap" style={{ gap: 6 }}>
                 {chunks.map((c) => <button key={c.label} type="button" className={`pill ${Number(c.hours) === e.hours ? 'on' : ''}`} onClick={() => onChange({ hours: Number(c.hours) })}>{c.label}</button>)}
-                <input type="number" step="0.25" min="0.25" max="24" aria-label="Custom hours" placeholder="…h" className="input" style={{ width: 64, height: 30, padding: '0 8px', borderRadius: 999, borderColor: !isChunk && e.hours ? 'var(--charcoal)' : undefined }}
-                  value={!isChunk && e.hours ? e.hours : ''} onChange={(ev) => onChange({ hours: Number(ev.target.value) || 0 })} />
+                <DurationInput hours={e.hours} isChunk={isChunk} onChange={(h) => onChange({ hours: h })} />
               </div>
             </div>
             <div className="col" style={{ gap: 6 }}>

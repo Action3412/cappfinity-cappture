@@ -37,6 +37,24 @@ export function fmtHours(h) {
   return `${w}h ${String(m).padStart(2, '0')}`
 }
 
+// Understands "3h 20m", "3h20", "3:20", "3.33", "3,5", "200m", "1.5h", "45 mins", "2 hours 10"
+// Returns hours as a number (rounded to the nearest minute), or null if it can't be read.
+export function parseDuration(input) {
+  if (input === null || input === undefined) return null
+  const s = String(input).trim().toLowerCase().replace(',', '.')
+  if (!s) return null
+  let m
+  if ((m = s.match(/^(\d{1,2}):([0-5]?\d)$/))) return round(Number(m[1]) + Number(m[2]) / 60)
+  if ((m = s.match(/^(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)?\s*(?:(\d+)\s*(?:m|min|mins|minute|minutes)?)?$/)) && /h|hr|hour/.test(s)) {
+    return round(Number(m[1]) + (m[2] ? Number(m[2]) / 60 : 0))
+  }
+  if ((m = s.match(/^(\d+(?:\.\d+)?)\s*(?:m|min|mins|minute|minutes)$/))) return round(Number(m[1]) / 60)
+  if ((m = s.match(/^(\d+(?:\.\d+)?)$/))) return round(Number(m[1]))
+  if ((m = s.match(/^(\d+)\s*(?:h|hr|hrs|hour|hours)\s*(\d+)$/))) return round(Number(m[1]) + Number(m[2]) / 60)
+  return null
+  function round(h) { return Math.round(h * 60) / 60 }
+}
+
 export function monthRange(d = new Date()) {
   const a = new Date(d.getFullYear(), d.getMonth(), 1), b = new Date(d.getFullYear(), d.getMonth() + 1, 0)
   return [toISODate(a), toISODate(b)]
