@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth.jsx'
 import { supabase } from '../lib/supabase.js'
-import { fmtHours } from '../lib/time.js'
+import { fmtHours, timeAgo, fmtDateTime } from '../lib/time.js'
 import { initials } from '../components/Shell.jsx'
 import { X } from '../components/Icons.jsx'
 import Hint from '../components/Hint.jsx'
@@ -355,6 +355,8 @@ function People() {
   const [invites, setInvites] = useState([])
   const [teams, setTeams] = useState([])
   const [weeks, setWeeks] = useState({})
+  const [activity, setActivity] = useState({})
+  const [, setTick] = useState(0)
   const [inv, setInv] = useState({ email: '', full_name: '', team_id: '', role: 'member' })
   const [issued, setIssued] = useState(null) // { name, email, password, kind }
   const [busy, setBusy] = useState(false)
@@ -363,16 +365,18 @@ function People() {
   const [toast, flash] = useToast()
 
   async function load() {
-    const [p, i, t, w] = await Promise.all([
+    const [p, i, t, w, a] = await Promise.all([
       supabase.from('profiles').select('*, teams(name)').order('full_name'),
       supabase.from('invites').select('*').is('accepted_at', null).order('created_at', { ascending: false }),
       supabase.from('teams').select('*').order('name'),
       supabase.rpc('week_shortfalls', { p_week_start: lastWeekStart() }),
+      supabase.rpc('people_activity'),
     ])
     setPeople(p.data || []); setInvites(i.data || []); setTeams(t.data || [])
+    const am = {}; (a.data || []).forEach((r) => { am[r.profile_id] = r }); setActivity(am)
     const m = {}; (w.data || []).forEach((r) => { m[r.profile_id] = Number(r.logged_hours) }); setWeeks(m)
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(); const i = setInterval(() => { load(); setTick((x) => x + 1) }, 60000); return () => clearInterval(i) }, [])
 
   async function callAdmin(payload) {
     const { data, error } = await supabase.functions.invoke('admin-users', { body: payload })
@@ -454,7 +458,7 @@ function People() {
         <div className="panel-h"><h2>People</h2><div className="row"><input className="input" placeholder="Find…" value={q} onChange={(e) => setQ(e.target.value)} style={{ height: 32, width: 180 }} /><span className="small muted">{people.filter((u) => u.active).length} active</span></div></div>
         <div className="scroll-x">
           <table className="tbl" style={{ minWidth: 820 }}>
-            <thead><tr><th>Name</th><th><span className="row" style={{ gap: 4 }}>Team<Hint title="Team" text="Which team someone sits in. Managers see Reports for their own team, and you can filter Reports by team." /></span></th><th><span className="row" style={{ gap: 4 }}>Role<Hint title="Role" text="Member: logs their own time. Manager: also sees their team's time in Reports and can chase people. Admin: can do everything, including add projects and people. You can't change your own role, to stop you locking yourself out." /></span></th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Target<Hint align="right" title="Weekly target" text="Hours this person is expected to log each week. 37.5 for full time. Set it lower for part-timers so they aren't flagged as short every week." /></span></th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Last week<Hint align="right" title="Last week" text="Whether they hit their target last week, and if not, by how much." /></span></th><th><span className="row" style={{ gap: 4 }}>Status<Hint title="Outlook" text="Whether they've connected their Outlook calendar so meetings can be suggested automatically. This switches on with the Microsoft sign-in phase." /></span></th><th /></tr></thead>
+            <thead><tr><th>Name</th><th><span className="row" style={{ gap: 4 }}>Team<Hint title="Team" text="Which team someone sits in. Managers see Reports for their own team, and you can filter Reports by team." /></span></th><th><span className="row" style={{ gap: 4 }}>Role<Hint title="Role" text="Member: logs their own time. Manager: also sees their team's time in Reports and can chase people. Admin: can do everything, including add projects and people. You can't change your own role, to stop you locking yourself out." /></span></th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Target<Hint align="right" title="Weekly target" text="Hours this person is expected to log each week. 37.5 for full time. Set it lower for part-timers so they aren't flagged as short every week." /></span></th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Last week<Hint align="right" title="Last week" text="Whether they hit their target last week, and if not, by how much." /></span></th><th><span className="row" style={{ gap: 4 }}>Activity<Hint title="Activity" text="A green dot means they have Cappture open right now (seen in the last five minutes). Underneath is when they last signed in. Hover for exact times. Never means they haven't signed in yet." /></span></th><th /></tr></thead>
             <tbody>
               {list.filter((u) => u.active).map((u) => {
                 const lw = weeks[u.id]
@@ -465,7 +469,13 @@ function People() {
                     <td><select className="select" style={{ height: 32, width: 120 }} value={u.role} onChange={(e) => patch(u, { role: e.target.value })} disabled={u.id === me.id}><option value="member">Member</option><option value="manager">Manager</option><option value="admin">Admin</option></select></td>
                     <td className="num"><input className="input" type="number" min="0" max="60" step="0.5" defaultValue={u.weekly_target} onBlur={(e) => Number(e.target.value) !== Number(u.weekly_target) && patch(u, { weekly_target: Number(e.target.value) })} style={{ width: 70, height: 32, textAlign: 'right' }} aria-label="Weekly target" /></td>
                     <td className="num" style={{ fontWeight: 600, color: lw === undefined ? 'var(--ok)' : lw === 0 ? 'var(--bad)' : 'var(--warn)' }}>{lw === undefined ? 'On target' : `${fmtHours(lw)} short`}</td>
-                    <td><span className={`tag ${u.calendar_connected ? 'ok' : 'grey'}`}>{u.calendar_connected ? 'Outlook linked' : 'No Outlook'}</span></td>
+                    <td>{(() => { const act = activity[u.id] || {}; const online = act.last_seen_at && (Date.now() - new Date(act.last_seen_at).getTime()) < 5 * 60000
+                      return (
+                        <div className="col" style={{ gap: 2 }} title={`Last signed in: ${act.last_sign_in_at ? fmtDateTime(act.last_sign_in_at) : 'never'}${act.last_seen_at ? `\nLast seen: ${fmtDateTime(act.last_seen_at)}` : ''}`}>
+                          <span className="row small" style={{ gap: 6, fontWeight: 600, color: online ? 'var(--ok)' : 'var(--text-2)' }}><i className="presence" style={{ background: online ? '#1E9E5A' : '#C4C4CC', boxShadow: online ? '0 0 0 3px rgba(30,158,90,.18)' : 'none' }} />{online ? 'Online now' : act.last_seen_at ? `Seen ${timeAgo(act.last_seen_at)}` : 'Not seen yet'}</span>
+                          <span className="tiny muted">{act.last_sign_in_at ? `Signed in ${timeAgo(act.last_sign_in_at)}` : 'Never signed in'}</span>
+                        </div>
+                      ) })()}</td>
                     <td className="num"><div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
                       <button className="btn sm" onClick={() => resetPassword(u)} title="Issue a new temporary password">Reset password</button>
                       {u.id !== me.id && <button className="btn sm danger" onClick={() => { if (confirm(`Remove ${u.full_name || u.email} from Cappture? Their logged time stays in reports.`)) patch(u, { active: false }) }}>Remove</button>}

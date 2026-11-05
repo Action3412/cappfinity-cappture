@@ -30,6 +30,16 @@ export function AuthProvider({ children }) {
     return () => sub.subscription.unsubscribe()
   }, [loadProfile])
 
+  // Presence heartbeat: every 2 minutes while the tab is open and visible, plus on focus.
+  useEffect(() => {
+    if (!session?.user) return
+    const ping = () => { if (document.visibilityState === 'visible') supabase.rpc('touch_presence').then(() => {}) }
+    ping()
+    const i = setInterval(ping, 120000)
+    window.addEventListener('focus', ping); document.addEventListener('visibilitychange', ping)
+    return () => { clearInterval(i); window.removeEventListener('focus', ping); document.removeEventListener('visibilitychange', ping) }
+  }, [session?.user?.id])
+
   const value = {
     session,
     user: session?.user ?? null,

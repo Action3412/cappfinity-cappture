@@ -347,3 +347,11 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none 
 .issued .btn { background: rgba(255,255,255,.1); color: #fff; border-color: rgba(255,255,255,.2); }
 .issued .btn:hover { background: rgba(255,255,255,.18); }
 .issued-pw { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 18px; letter-spacing: .04em; background: rgba(255,255,255,.1); padding: 6px 12px; border-radius: 8px; }
+.presence { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: 0 0 auto; }
+/* Hint spacing: consistent gap and baseline wherever the "i" sits */
+.hint { margin-left: 6px; vertical-align: -1px; }
+.row > .hint, .field .row > .hint { margin-left: 2px; }
+h1 + .hint { margin-left: 2px; }
+.kpi > span:first-child .hint, .panel-h h2 .hint, .chart-card h2 .hint { margin-left: 6px; }
+.label .hint { margin-left: 4px; }
+.hint-btn { line-height: 1; }

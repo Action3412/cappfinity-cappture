@@ -69,3 +69,19 @@ export function quarterRange(d = new Date()) {
 export function timeToHours(t) { if (!t) return null; const [h, m] = String(t).split(':').map(Number); return h + (m || 0) / 60 }
 export function hoursToTime(h) { h = Math.max(0, Math.min(23.99, h)); const hh = Math.floor(h), mm = Math.round((h - hh) * 60); return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}` }
 export function fmtClock(h) { const hh = Math.floor(h), mm = Math.round((h - hh) * 60); return `${hh}:${String(mm).padStart(2, '0')}` }
+
+export function timeAgo(iso) {
+  if (!iso) return 'never'
+  const d = (Date.now() - new Date(iso).getTime()) / 1000
+  if (d < 60) return 'just now'
+  if (d < 3600) return `${Math.floor(d / 60)} min ago`
+  if (d < 86400) return `${Math.floor(d / 3600)} h ago`
+  if (d < 86400 * 7) return `${Math.floor(d / 86400)} d ago`
+  const dt = new Date(iso)
+  return `${dt.getDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dt.getMonth()]}${dt.getFullYear() !== new Date().getFullYear() ? ' ' + dt.getFullYear() : ''}`
+}
+export function fmtDateTime(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return `${d.getDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]} ${d.getFullYear()}, ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+}
