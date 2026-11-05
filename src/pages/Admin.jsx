@@ -374,7 +374,7 @@ function People() {
     ])
     setPeople(p.data || []); setInvites(i.data || []); setTeams(t.data || [])
     const am = {}; (a.data || []).forEach((r) => { am[r.profile_id] = r }); setActivity(am)
-    const m = {}; (w.data || []).forEach((r) => { m[r.profile_id] = Number(r.logged_hours) }); setWeeks(m)
+    const m = {}; (w.data || []).forEach((r) => { m[r.profile_id] = { logged: Number(r.logged_hours), short: Number(r.shortfall) } }); setWeeks(m)
   }
   useEffect(() => { load(); const i = setInterval(() => { load(); setTick((x) => x + 1) }, 60000); return () => clearInterval(i) }, [])
 
@@ -468,7 +468,7 @@ function People() {
                     <td><select className="select" style={{ height: 32, width: 150 }} value={u.team_id || ''} onChange={(e) => patch(u, { team_id: e.target.value || null })}><option value="">No team</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></td>
                     <td><select className="select" style={{ height: 32, width: 120 }} value={u.role} onChange={(e) => patch(u, { role: e.target.value })} disabled={u.id === me.id}><option value="member">Member</option><option value="manager">Manager</option><option value="admin">Admin</option></select></td>
                     <td className="num"><input className="input" type="number" min="0" max="60" step="0.5" defaultValue={u.weekly_target} onBlur={(e) => Number(e.target.value) !== Number(u.weekly_target) && patch(u, { weekly_target: Number(e.target.value) })} style={{ width: 70, height: 32, textAlign: 'right' }} aria-label="Weekly target" /></td>
-                    <td className="num" style={{ fontWeight: 600, color: lw === undefined ? 'var(--ok)' : lw === 0 ? 'var(--bad)' : 'var(--warn)' }}>{lw === undefined ? 'On target' : `${fmtHours(lw)} short`}</td>
+                    <td className="num" style={{ fontWeight: 600, color: lw === undefined ? 'var(--ok)' : lw.logged === 0 ? 'var(--bad)' : 'var(--warn)' }} title={lw ? `${fmtHours(lw.logged)} logged` : ''}>{lw === undefined ? 'On target' : lw.logged === 0 ? 'Nothing logged' : `${fmtHours(lw.short)} short`}</td>
                     <td>{(() => { const act = activity[u.id] || {}; const online = act.last_seen_at && (Date.now() - new Date(act.last_seen_at).getTime()) < 5 * 60000
                       return (
                         <div className="col" style={{ gap: 2 }} title={`Last signed in: ${act.last_sign_in_at ? fmtDateTime(act.last_sign_in_at) : 'never'}${act.last_seen_at ? `\nLast seen: ${fmtDateTime(act.last_seen_at)}` : ''}`}>
