@@ -158,7 +158,7 @@ function Projects() {
         <div className="panel-h" style={{ flexWrap: 'wrap', gap: 10 }}>
           <h2>Client projects <span className="small muted" style={{ fontWeight: 500 }}>{list.length}{filtering ? ` of ${projects.filter((p) => showArchived || p.status === 'active').length}` : ''}</span></h2>
           <div className="filterbar" role="group" aria-label="Project filters">
-            <label className="filter search"><span>Search</span><input type="search" placeholder="Name, code or client…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search projects" /></label>
+            <label className="filter find"><span>Search</span><input type="search" placeholder="Name, code or client…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search projects" /></label>
             <label className="filter"><span>Client</span><select value={fClient} onChange={(e) => setFClient(e.target.value)}><option value="all">All clients</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
             <label className="filter"><span>Type</span><select value={fBill} onChange={(e) => setFBill(e.target.value)}><option value="all">Billable and not</option><option value="yes">Billable only</option><option value="no">Non-billable only</option></select></label>
             <label className="filter toggle"><span>Archived</span><span className="row" style={{ gap: 6, height: 22 }}><input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /><span style={{ fontSize: 13, fontWeight: 600 }}>{showArchived ? 'Shown' : 'Hidden'}</span></span></label>
@@ -484,7 +484,7 @@ function People() {
       )}
 
       <section className="panel" style={{ overflow: 'hidden' }}>
-        <div className="panel-h" style={{ flexWrap: 'wrap', gap: 10 }}><h2>People <span className="small muted" style={{ fontWeight: 500 }}>{people.filter((u) => u.active).length} active</span></h2><div className="filterbar" role="group" aria-label="People filters"><label className="filter search"><span>Search</span><input type="search" placeholder="Name, email or team…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search people" /></label></div></div>
+        <div className="panel-h" style={{ flexWrap: 'wrap', gap: 10 }}><h2>People <span className="small muted" style={{ fontWeight: 500 }}>{people.filter((u) => u.active).length} active</span></h2><div className="filterbar" role="group" aria-label="People filters"><label className="filter find"><span>Search</span><input type="search" placeholder="Name, email or team…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search people" /></label></div></div>
         <div className="scroll-x">
           <table className="tbl" style={{ minWidth: 1000 }}>
             <thead><tr>
