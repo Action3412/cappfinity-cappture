@@ -90,17 +90,21 @@ export function DayColumn({ date, entries, dayHours, dayStart, dayEnd, range, pr
   return (
     <section className={`day st-${state} ${isToday ? 'today' : ''}`} data-day={date} data-from={from}>
       <div className="day-progress" aria-hidden="true"><div style={{ width: `${pct}%` }} /></div>
-      <div className="row between" style={{ padding: '2px 6px 4px' }}>
-        <div className="row" style={{ gap: 6, alignItems: 'baseline' }}><b>{dayName(date)}</b><span className="small muted">{shortDate(date)}</span>{isToday && <span className="today-pip">Today</span>}</div>
-        <span className="small row day-total" style={{ gap: 8, fontWeight: 600 }}>
-          {fmtHours(tot)}
-          <Ring value={tot} target={dayHours} size={30} stroke={4} track="rgba(38,38,38,.08)" className="mini">
-            {state === 'done' && <Check width="12" height="12" style={{ color: 'var(--ok)' }} />}
-          </Ring>
-          {isFirst && <Hint size={12} align="right" title="Your day" text={`The column is your working day, ${fmtClock(dayStart)} to ${fmtClock(dayEnd)}, and stretches if you worked outside that. Drop a project at the time you started it, pull either end of the block to set how long, and drag it up or down to move it. Gaps are fine: that's lunch. The number here is hours logged against your ${dayHours}h target.`} />}
-        </span>
-      </div>
-      {status(state, left) && <div className={`day-status ${state}`}>{status(state, left)}</div>}
+      <header className="day-head">
+        <div className="day-head-row">
+          <div className="day-name"><b>{dayName(date)}</b><span>{shortDate(date)}</span>{isToday && <span className="today-pip">Today</span>}</div>
+          <div className="day-meter">
+            <span className="day-total">{fmtHours(tot)}</span>
+            <Ring value={tot} target={dayHours} size={34} stroke={4.5} track="rgba(38,38,38,.08)" className="mini">
+              {state === 'done' && <Check width="13" height="13" style={{ color: 'var(--ok)' }} />}
+            </Ring>
+          </div>
+        </div>
+        <div className="day-head-row">
+          {status(state, left) ? <span className={`day-status ${state}`}>{status(state, left)}</span> : <span className="day-status future">{fmtClock(dayStart)} – {fmtClock(dayEnd)}</span>}
+          {isFirst && <Hint size={12} align="left" title="Your day" text={`The column is your working day, ${fmtClock(dayStart)} to ${fmtClock(dayEnd)}, and stretches if you worked outside that. Drop a project at the time you started it, pull either end of the block to set how long, and drag it up or down to move it. Gaps are fine: that's lunch. The number here is hours logged against your ${dayHours}h target.`} />}
+        </div>
+      </header>
 
       <div className="track" ref={trackRef} style={{ height: trackH }}>
         {hours.map((h) => (
@@ -109,7 +113,7 @@ export function DayColumn({ date, entries, dayHours, dayStart, dayEnd, range, pr
         {hours.map((h) => h + 0.5 <= to && <span key={h + 'h'} className="half-line" style={{ top: (h + 0.5 - from) * PX_PER_HOUR }} />)}
         {dayStart > from && <span className="edge-line" style={{ top: (dayStart - from) * PX_PER_HOUR }}>{!range && <i>start</i>}</span>}
         <span className="edge-line" style={{ top: (dayEnd - from) * PX_PER_HOUR }}>{!range && <i>{fmtClock(dayEnd)}</i>}</span>
-        {isToday && now >= from && now <= to && <span className="now-line" style={{ top: (now - from) * PX_PER_HOUR }}><i /></span>}
+        {isToday && now >= from && now <= to && <span className="now-line" style={{ top: (now - from) * PX_PER_HOUR }}><i /><em>{fmtClock(Math.floor(now) + Math.round((now % 1) * 60) / 60)}</em></span>}
 
         {entries.map((e) => (
           <EntryBlock key={e.id} e={e} top={(startOf(e, dayStart) - from) * PX_PER_HOUR} lane={lanes[e.id]} project={projById[e.project_id]} workType={wtById[e.work_type_id]} editing={editingId === e.id}

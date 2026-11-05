@@ -460,3 +460,42 @@ h1 + .hint { margin-left: 2px; }
 .board .day-status { top: 38px; }
 .board .day::before { height: 72px; opacity: .9; }
 .board .day > .day-status { position: absolute; top: 40px; left: 16px; z-index: 2; }
+
+/* ======================= Board v2: gaps, headers, now marker ======================= */
+.board { gap: 0 10px; padding: 10px 12px 12px 4px; background: #fff; }
+.board .day, .board .day:nth-child(2) { border: 0; border-radius: 16px; background: #FAFAFC; padding: 0 8px 12px; overflow: hidden; }
+.board .day::after { height: 3px; border-radius: 16px 16px 0 0; }
+.board .day::before { height: 96px; opacity: 1; }
+.board .day.st-part { --wash: #FFF5D6; }
+.board .day.st-short { --wash: #FFE7F8; }
+.board .day.st-done { --wash: #E2F5E9; }
+.board .day.st-future { --wash: #F1F1F5; }
+.board .day.today { box-shadow: inset 0 0 0 2px rgba(72,123,250,.4); background: #F8FAFF; }
+.board .day.today .track { background-color: transparent; }
+
+/* header */
+.board .day > .row.between { display: none; }
+.board .day-head { position: relative; z-index: 1; height: 92px; padding: 14px 8px 0; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }
+.day-head-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 34px; }
+.day-head-row:last-child { min-height: 26px; padding-bottom: 6px; }
+.day-name { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+.day-name b { font-size: 17px; letter-spacing: -.3px; }
+.day-name span { font-size: 12.5px; color: var(--muted); }
+.day-name .today-pip { font-size: 9.5px; padding: 2px 7px; margin-left: 2px; position: relative; top: -1px; }
+.day-meter { display: flex; align-items: center; gap: 8px; }
+.day-meter .day-total { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.day.st-part .day-meter .day-total { color: #8A6400; } .day.st-short .day-meter .day-total { color: #B0348F; } .day.st-done .day-meter .day-total { color: var(--ok); } .day.st-future .day-meter .day-total { color: var(--muted-2); }
+.board .day > .day-status, .board .day-status { position: static; margin: 0; font-size: 11px; padding: 3px 9px; }
+.day-status.future { background: transparent; color: var(--muted-2); padding-left: 0; font-weight: 600; }
+.board .track { margin-top: 0; }
+.gutter-head { height: 92px; }
+.gutter .track { margin-top: 0; }
+.gutter-label { right: 6px; }
+
+/* now marker */
+.now-line { left: 0; right: 0; border-top: 2px solid var(--blue); opacity: .9; }
+.now-line i { left: -1px; top: -5px; width: 8px; height: 8px; }
+.now-line em { position: absolute; left: 10px; top: -9px; font-style: normal; font-size: 10px; font-weight: 700; color: #fff; background: var(--blue); padding: 1px 6px; border-radius: 999px; line-height: 14px; }
+
+/* blocks a touch softer inside the grey columns */
+.board .block { border-color: rgba(38,38,38,.08); box-shadow: 0 1px 2px rgba(38,38,38,.05), 0 4px 12px rgba(38,38,38,.04); }
