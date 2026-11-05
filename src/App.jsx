@@ -12,7 +12,8 @@ export default function App() {
   const { session, profile, isManager, isAdmin } = useAuth()
 
   if (session === undefined) return <div className="center">Loading…</div>
-  if (!session) return <Login />
+  // /welcome always shows the sign-in screen, handy for sharing the front door or checking it while signed in
+  if (!session || window.location.pathname === '/welcome') return <Login />
   if (profile === null) return <div className="center col" style={{ gap: 10 }}>Setting up your account…<button className="btn sm" onClick={() => window.location.reload()}>Taking too long? Reload</button></div>
   if (!profile.active) return <Pending />
 
