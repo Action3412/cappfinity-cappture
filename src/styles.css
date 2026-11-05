@@ -655,8 +655,8 @@ h1 + .hint { margin-left: 2px; }
 @keyframes block-in { from { transform: scale(.97); opacity: .6; } to { transform: none; opacity: 1; } }
 .day-head { transition: background .35s ease; }
 .ring-wrap svg circle:last-child { transition: stroke-dasharray .9s cubic-bezier(.2,.8,.2,1) !important; }
-.panel { animation: panel-in .25s ease both; }
-@keyframes panel-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.panel:not(.sheet) { animation: panel-in .25s ease both; }
+@keyframes panel-in { from { opacity: 0; } to { opacity: 1; } }
 
 /* Loading skeletons */
 .skel { position: relative; overflow: hidden; background: #ECECF1; border-radius: 12px; }
