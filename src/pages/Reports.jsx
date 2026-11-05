@@ -1,0 +1,258 @@
+import { useEffect, useMemo, useState } from 'react'
+import { useAuth } from '../lib/auth.jsx'
+import { supabase } from '../lib/supabase.js'
+import { today, weekStart, addDays, monthRange, quarterRange, fmtHours, longDate } from '../lib/time.js'
+import { downloadCSV } from '../lib/data.js'
+import { initials } from '../components/Shell.jsx'
+import { ChevronR, Download } from '../components/Icons.jsx'
+
+const AVATARS = ['#FDE9A8', '#D8CFFE', '#FED3FB', '#C9D6FD', '#DDEFE5', '#F6D5C9']
+const av = (n = '') => AVATARS[[...n].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATARS.length]
+
+function periodRange(p, custom) {
+  const t = today()
+  if (p === 'week') return [weekStart(t), addDays(weekStart(t), 6)]
+  if (p === 'lastweek') return [addDays(weekStart(t), -7), addDays(weekStart(t), -1)]
+  if (p === 'month') return monthRange()
+  if (p === 'quarter') return quarterRange()
+  if (p === 'custom') return [custom.from || '2020-01-01', custom.to || t]
+  return ['2020-01-01', '2100-01-01']
+}
+
+export default function Reports() {
+  const { isAdmin, profile } = useAuth()
+  const [period, setPeriod] = useState('month')
+  const [custom, setCustom] = useState({ from: monthRange()[0], to: today() })
+  const [client, setClient] = useState('all')
+  const [team, setTeam] = useState('all')
+  const [person, setPerson] = useState('all')
+  const [workType, setWorkType] = useState('all')
+  const [rows, setRows] = useState([])
+  const [projectTotals, setProjectTotals] = useState([])
+  const [shortfalls, setShortfalls] = useState([])
+  const [expanded, setExpanded] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [showRates, setShowRates] = useState(false)
+  const [toast, setToast] = useState('')
+  const flash = (m) => { setToast(m); setTimeout(() => setToast(''), 2500) }
+
+  const [from, to] = periodRange(period, custom)
+  const lastWeek = addDays(weekStart(today()), -7)
+
+  useEffect(() => {
+    let dead = false
+    setLoading(true)
+    Promise.all([
+      supabase.from('v_entries').select('*').gte('entry_date', from).lte('entry_date', to).order('entry_date'),
+      supabase.from('v_project_totals').select('*'),
+      supabase.rpc('week_shortfalls', { p_week_start: lastWeek }),
+    ]).then(([e, p, s]) => {
+      if (dead) return
+      setRows((e.data || []).map((r) => ({ ...r, hours: Number(r.hours) })))
+      setProjectTotals(p.data || [])
+      setShortfalls(s.data || [])
+      setLoading(false)
+    })
+    return () => { dead = true }
+  }, [from, to, lastWeek])
+
+  const options = useMemo(() => ({
+    clients: [...new Set(rows.map((r) => r.client))].sort(),
+    teams: [...new Set(rows.map((r) => r.team).filter(Boolean))].sort(),
+    people: [...new Map(rows.map((r) => [r.profile_id, r.person || r.email])).entries()].sort((a, b) => a[1].localeCompare(b[1])),
+    workTypes: [...new Set(rows.map((r) => r.work_type).filter(Boolean))].sort(),
+  }), [rows])
+
+  const scoped = useMemo(() => rows.filter((r) =>
+    (client === 'all' || r.client === client) && (team === 'all' || r.team === team) &&
+    (person === 'all' || r.profile_id === person) && (workType === 'all' || r.work_type === workType)), [rows, client, team, person, workType])
+
+  const wtNames = useMemo(() => [...new Set(rows.map((r) => r.work_type || 'Uncategorised'))].sort(), [rows])
+
+  // client → project → person
+  const tree = useMemo(() => {
+    const byClient = new Map()
+    scoped.forEach((r) => {
+      if (!byClient.has(r.client_id)) byClient.set(r.client_id, { id: r.client_id, name: r.client, internal: r.is_internal, logged: 0, projects: new Map() })
+      const c = byClient.get(r.client_id); c.logged += r.hours
+      if (!c.projects.has(r.project_id)) c.projects.set(r.project_id, { id: r.project_id, name: r.project, code: r.project_code, colour: r.colour, budget: Number(r.budget_hours), billable: r.billable, logged: 0, people: new Map() })
+      const p = c.projects.get(r.project_id); p.logged += r.hours
+      const key = r.profile_id
+      if (!p.people.has(key)) p.people.set(key, { id: key, name: r.person || r.email, team: r.team || '—', total: 0, byType: {} })
+      const pp = p.people.get(key); pp.total += r.hours; const wt = r.work_type || 'Uncategorised'; pp.byType[wt] = (pp.byType[wt] || 0) + r.hours
+    })
+    return [...byClient.values()].sort((a, b) => (a.internal - b.internal) || b.logged - a.logged)
+      .map((c) => ({ ...c, projects: [...c.projects.values()].sort((a, b) => b.logged - a.logged).map((p) => ({ ...p, people: [...p.people.values()].sort((a, b) => b.total - a.total) })) }))
+  }, [scoped])
+
+  const totalLogged = scoped.reduce((a, r) => a + r.hours, 0)
+  const billable = scoped.reduce((a, r) => a + (r.billable ? r.hours : 0), 0)
+  const projectIdsInScope = new Set(scoped.map((r) => r.project_id))
+  const budgetInScope = projectTotals.filter((p) => projectIdsInScope.has(p.project_id) && Number(p.budget_hours) > 0)
+  const budgetAlloc = budgetInScope.reduce((a, p) => a + Number(p.budget_hours), 0)
+  const budgetUsed = budgetInScope.reduce((a, p) => a + Number(p.logged_hours), 0)
+  const allTime = Object.fromEntries(projectTotals.map((p) => [p.project_id, Number(p.logged_hours)]))
+
+  const mix = useMemo(() => {
+    const m = {}; scoped.forEach((r) => { const k = r.work_type || 'Uncategorised'; m[k] = (m[k] || 0) + r.hours })
+    const max = Math.max(1, ...Object.values(m))
+    return Object.entries(m).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ k, v, w: Math.round((v / max) * 100) }))
+  }, [scoped])
+
+  function exportCSV(subset = scoped, name = 'cappture') {
+    downloadCSV(`${name}-${from}-to-${to}.csv`, subset, [
+      { label: 'Date', value: 'entry_date' }, { label: 'Week starting', value: 'week_start' },
+      { label: 'Person', value: 'person' }, { label: 'Email', value: 'email' }, { label: 'Team', value: 'team' },
+      { label: 'Client', value: 'client' }, { label: 'Project', value: 'project' }, { label: 'Project code', value: 'project_code' },
+      { label: 'Billable', value: (r) => (r.billable ? 'Yes' : 'No') }, { label: 'Work type', value: 'work_type' },
+      { label: 'Hours', value: 'hours' }, { label: 'Note', value: 'note' }, { label: 'Source', value: 'source' },
+    ])
+  }
+
+  async function remind(s) {
+    const { error } = await supabase.from('reminder_log').insert({ profile_id: s.profile_id, week_start: lastWeek, kind: 'manual', sent_by: profile.id })
+    if (error) { flash(error.message); return }
+    setShortfalls((x) => x.map((y) => (y.profile_id === s.profile_id ? { ...y, reminded_at: new Date().toISOString() } : y)))
+    flash('Reminder noted — automatic emails switch on with the Outlook phase')
+  }
+  async function remindAll() {
+    const pending = shortfalls.filter((s) => !s.reminded_at)
+    if (!pending.length) return
+    const { error } = await supabase.from('reminder_log').insert(pending.map((s) => ({ profile_id: s.profile_id, week_start: lastWeek, kind: 'manual', sent_by: profile.id })))
+    if (error) { flash(error.message); return }
+    const now = new Date().toISOString()
+    setShortfalls((x) => x.map((y) => ({ ...y, reminded_at: y.reminded_at || now })))
+    flash(`Noted ${pending.length} reminders`)
+  }
+
+  const scopeLabel = [client === 'all' ? 'All clients' : client, team === 'all' ? 'all teams' : `${team} team`, person === 'all' ? '' : options.people.find((p) => p[0] === person)?.[1], `${longDate(from)} – ${longDate(to)}`].filter(Boolean).join(' · ')
+  const sel = { height: 36 }
+
+  return (
+    <div className="page col" style={{ gap: 18 }}>
+      <div className="row between wrap" style={{ alignItems: 'flex-end', gap: 14 }}>
+        <div className="col" style={{ gap: 4 }}><h1>Allocated vs actual</h1><span className="small muted">{scopeLabel}</span></div>
+        <div className="row wrap" style={{ gap: 8, alignItems: 'flex-end' }}>
+          <label className="field">Period
+            <select className="select" style={sel} value={period} onChange={(e) => setPeriod(e.target.value)}>
+              <option value="week">This week</option><option value="lastweek">Last week</option><option value="month">This month</option>
+              <option value="quarter">This quarter</option><option value="all">All time</option><option value="custom">Custom…</option>
+            </select></label>
+          {period === 'custom' && (<>
+            <label className="field">From<input type="date" className="input" style={sel} value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} /></label>
+            <label className="field">To<input type="date" className="input" style={sel} value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} /></label>
+          </>)}
+          <label className="field">Client<select className="select" style={sel} value={client} onChange={(e) => setClient(e.target.value)}><option value="all">All clients</option>{options.clients.map((c) => <option key={c}>{c}</option>)}</select></label>
+          <label className="field">Team<select className="select" style={sel} value={team} onChange={(e) => setTeam(e.target.value)}><option value="all">All teams</option>{options.teams.map((c) => <option key={c}>{c}</option>)}</select></label>
+          <label className="field">Person<select className="select" style={sel} value={person} onChange={(e) => setPerson(e.target.value)}><option value="all">Everyone</option>{options.people.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select></label>
+          <label className="field">Work type<select className="select" style={sel} value={workType} onChange={(e) => setWorkType(e.target.value)}><option value="all">All</option>{options.workTypes.map((c) => <option key={c}>{c}</option>)}</select></label>
+          <button className="btn primary" onClick={() => exportCSV()} disabled={!scoped.length}><Download /> Export CSV</button>
+        </div>
+      </div>
+
+      <div className="kpis">
+        <div className="kpi dark"><span className="small" style={{ opacity: .7 }}>Hours logged</span><b>{fmtHours(totalLogged)}</b><span className="small" style={{ opacity: .7 }}>{fmtHours(billable)} billable · {scoped.length} entries</span></div>
+        <div className="kpi"><span className="small muted">Billable share</span><b>{totalLogged ? Math.round((billable / totalLogged) * 100) : 0}%</b><div className="bar"><div style={{ width: `${totalLogged ? Math.round((billable / totalLogged) * 100) : 0}%`, background: 'var(--spectrum)' }} /></div></div>
+        <div className="kpi"><span className="small muted">Budget used <span className="tiny">(project to date)</span></span><b>{budgetAlloc ? `${Math.round((budgetUsed / budgetAlloc) * 100)}%` : '—'}</b><span className="small muted">{budgetAlloc ? `${fmtHours(budgetUsed)} of ${budgetAlloc}h across ${budgetInScope.length} budgeted ${budgetInScope.length === 1 ? 'project' : 'projects'}` : 'no budgeted projects in scope'}</span></div>
+        <div className="kpi"><span className="small muted">Short of target last week</span><b style={{ color: shortfalls.length ? 'var(--bad)' : 'var(--ok)' }}>{shortfalls.length}</b><span className="small muted">{isAdmin ? 'across everyone' : 'in your team'} · week of {longDate(lastWeek)}</span></div>
+      </div>
+
+      <div className="row wrap" style={{ gap: 18, alignItems: 'flex-start' }}>
+        <section className="panel" style={{ flex: '999 1 600px', minWidth: 0, overflow: 'hidden' }}>
+          <div className="panel-h"><h2>By client and project</h2><div className="row"><span className="small muted">Click a project to see who logged what</span>{isAdmin && <button className="btn sm" onClick={() => setShowRates((s) => !s)}>{showRates ? 'Hide' : 'Show'} rates</button>}</div></div>
+          <div className="scroll-x">
+            <table className="tbl" style={{ minWidth: 760 }}>
+              <thead><tr><th>Project</th><th className="num">Allocated</th><th className="num">Logged</th><th style={{ width: '22%' }}>Progress (to date)</th><th className="num">People</th><th className="num">Status</th></tr></thead>
+              <tbody>
+                {loading && <tr><td colSpan="6" className="center">Loading…</td></tr>}
+                {!loading && tree.length === 0 && <tr><td colSpan="6" className="center">No time logged in this range.</td></tr>}
+                {tree.map((c) => (
+                  <GroupRows key={c.id} c={c} expanded={expanded} setExpanded={setExpanded} allTime={allTime} wtNames={wtNames} showRates={showRates} onExport={(p) => exportCSV(scoped.filter((r) => r.project_id === p.id), p.code)} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <aside className="col" style={{ flex: '1 1 300px', maxWidth: 380, gap: 14 }}>
+          <div className="panel panel-b col" style={{ gap: 10 }}>
+            <h2>Where the time went</h2><span className="small muted">By work type in this scope</span>
+            {mix.map((m) => (
+              <div className="col" style={{ gap: 4 }} key={m.k}>
+                <div className="row between small"><b>{m.k}</b><span className="muted">{fmtHours(m.v)} · {totalLogged ? Math.round((m.v / totalLogged) * 100) : 0}%</span></div>
+                <div className="bar" style={{ height: 8 }}><div style={{ width: `${m.w}%`, background: 'var(--violet)' }} /></div>
+              </div>
+            ))}
+            {!mix.length && <span className="small muted">Nothing yet.</span>}
+          </div>
+
+          <div className="panel panel-b col" style={{ gap: 10 }}>
+            <div className="row between"><h2>Short of target last week</h2>{shortfalls.some((s) => !s.reminded_at) && <button className="btn sm primary" onClick={remindAll}>Remind all</button>}</div>
+            <span className="small muted">Week of {longDate(lastWeek)}. Automatic Friday and Monday emails arrive with the Outlook phase; use this to chase by hand meanwhile.</span>
+            {shortfalls.map((s) => (
+              <div className="row" key={s.profile_id} style={{ padding: '8px 0', borderBottom: '1px dotted var(--line)', gap: 10 }}>
+                <span className="avatar sm" style={{ background: av(s.person || s.email) }}>{initials(s.person || s.email)}</span>
+                <div className="col grow" style={{ gap: 0, minWidth: 0 }}><b className="small" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.person || s.email}</b><span className="tiny muted">{s.team || 'No team'} · {fmtHours(s.logged_hours)} logged</span></div>
+                <b className="small" style={{ color: 'var(--bad)', whiteSpace: 'nowrap' }}>−{fmtHours(s.shortfall)}</b>
+                {s.reminded_at ? <span className="tag ok">Reminded</span> : <button className="btn sm" onClick={() => remind(s)}>Remind</button>}
+              </div>
+            ))}
+            {!shortfalls.length && !loading && <div className="note info">Everyone hit their target. 🎉</div>}
+          </div>
+        </aside>
+      </div>
+      {toast && <div className="toast" role="status">{toast}</div>}
+    </div>
+  )
+}
+
+function GroupRows({ c, expanded, setExpanded, allTime, wtNames, showRates, onExport }) {
+  return (
+    <>
+      <tr className="group"><td>{c.name}</td><td className="num muted">{c.projects.reduce((a, p) => a + p.budget, 0) ? `${c.projects.reduce((a, p) => a + p.budget, 0)}h` : ''}</td><td className="num">{fmtHours(c.logged)}</td><td /><td /><td /></tr>
+      {c.projects.map((p) => {
+        const toDate = allTime[p.id] ?? p.logged
+        const pct = p.budget ? Math.round((toDate / p.budget) * 100) : 0
+        const over = p.budget && toDate > p.budget
+        const status = !p.budget ? 'Unbudgeted' : over ? 'Over' : pct >= 90 ? 'Nearly out' : 'On track'
+        const cls = status === 'Over' ? 'bad' : status === 'Nearly out' ? 'warn' : status === 'Unbudgeted' ? 'grey' : 'ok'
+        const open = expanded === p.id
+        return (
+          <GroupProject key={p.id} p={p} open={open} toggle={() => setExpanded(open ? null : p.id)} pct={pct} over={over} status={status} cls={cls} toDate={toDate} wtNames={wtNames} showRates={showRates} onExport={() => onExport(p)} />
+        )
+      })}
+    </>
+  )
+}
+
+function GroupProject({ p, open, toggle, pct, over, status, cls, toDate, wtNames, showRates, onExport }) {
+  return (
+    <>
+      <tr className="click" onClick={toggle} aria-expanded={open}>
+        <td><div className="row" style={{ gap: 10 }}><ChevronR width="12" height="12" style={{ color: 'var(--muted)', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }} /><span className="swatch" style={{ background: p.colour }} /><div className="col" style={{ gap: 0 }}><b>{p.name}</b><span className="tiny muted">{p.code}{p.billable ? '' : ' · non-billable'}</span></div></div></td>
+        <td className="num">{p.budget ? `${p.budget}h` : '—'}</td>
+        <td className="num"><b>{fmtHours(p.logged)}</b></td>
+        <td><div className="row"><div className="bar grow"><div style={{ width: `${Math.min(100, pct)}%`, background: over ? 'var(--bad)' : pct >= 90 ? 'var(--gold)' : p.colour }} /></div><span className="tiny muted" style={{ width: 70, textAlign: 'right' }}>{p.budget ? `${fmtHours(toDate)} · ${pct}%` : ''}</span></div></td>
+        <td className="num">{p.people.length}</td>
+        <td className="num"><span className={`tag ${cls}`}>{status}</span></td>
+      </tr>
+      {open && (
+        <tr className="sub"><td colSpan="6" style={{ padding: '6px 16px 14px 44px' }}>
+          <div className="scroll-x">
+            <table className="tbl" style={{ fontSize: 12 }}>
+              <thead><tr><th>Person</th><th>Team</th>{wtNames.map((w) => <th key={w} className="num">{w}</th>)}<th className="num">Total</th>{showRates && <th className="num">Rate</th>}</tr></thead>
+              <tbody>
+                {p.people.map((pp) => (
+                  <tr key={pp.id}><td><div className="row"><span className="avatar sm" style={{ background: av(pp.name) }}>{initials(pp.name)}</span><b>{pp.name}</b></div></td><td className="muted">{pp.team}</td>
+                    {wtNames.map((w) => <td key={w} className="num">{pp.byType[w] ? fmtHours(pp.byType[w]) : <span className="muted">–</span>}</td>)}
+                    <td className="num"><b>{fmtHours(pp.total)}</b></td>{showRates && <td className="num muted">not set</td>}</tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="row" style={{ justifyContent: 'flex-end', paddingTop: 10 }}><button className="btn sm" onClick={(e) => { e.stopPropagation(); onExport() }}><Download /> Download this project</button></div>
+        </td></tr>
+      )}
+    </>
+  )
+}
