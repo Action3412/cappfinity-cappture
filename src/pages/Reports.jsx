@@ -200,7 +200,7 @@ export default function Reports() {
             </section>
             <section className="panel panel-b col" style={{ gap: 6 }}>
               <h2>Where the time went<Hint title="Where the time went" text="Share of hours by work type within the current filters. Handy for spotting a project that's all meetings and no delivery, or a team where QA is getting squeezed." /></h2>
-              <Donut data={donut} centreLabel="logged" centreValue={fmtHours(totalLogged).replace(/ \d+$/, '')} />
+              <Donut data={donut} centreLabel="logged" centreValue={fmtHours(totalLogged)} />
             </section>
           </div>
           <div className="charts-2">

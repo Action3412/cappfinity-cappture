@@ -70,7 +70,7 @@ export function HBars({ data, colour = BILLABLE, format = fmtHours, max: maxIn, 
   const bx = labelW, bwMax = W - labelW - valW
   return (
     <div className="chart">
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Bar chart">
+      <svg className="hbars" viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Bar chart">
         {rows.map((d, i) => {
           const yy = i * rowH + 6, w = Math.max(2, (d.value / max) * bwMax)
           return (

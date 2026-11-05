@@ -308,3 +308,6 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none 
 .heat-row { display: grid; grid-template-columns: minmax(90px, 1.2fr) repeat(5, minmax(0, 1fr)) 56px; gap: 4px; align-items: center; }
 .heat-row.head { padding-bottom: 2px; }
 .heat-cell { height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kpi.dark { background: var(--charcoal); color: #fff; border: 0; }
+.kpi.dark .hint-btn { color: rgba(255,255,255,.6); }
+.chart svg.hbars { max-width: 560px; display: block; }
