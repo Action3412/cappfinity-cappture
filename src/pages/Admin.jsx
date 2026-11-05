@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase.js'
 import { fmtHours } from '../lib/time.js'
 import { initials } from '../components/Shell.jsx'
 import { X } from '../components/Icons.jsx'
+import Hint from '../components/Hint.jsx'
 
 const COLOURS = ['#487BFA', '#9275FA', '#FB6CF5', '#FDB601', '#2BB3A3', '#F08A4B', '#5C6BC0', '#26A69A']
 const AVATARS = ['#FDE9A8', '#D8CFFE', '#FED3FB', '#C9D6FD', '#DDEFE5', '#F6D5C9']
@@ -103,16 +104,16 @@ function Projects() {
   return (
     <>
       <section className="panel panel-b col" style={{ gap: 12 }}>
-        <h2>Add a client project</h2>
+        <h2>Add a client project<Hint title="Client projects" text="A project is anything people log time against. Usually it's a piece of client work, but you can add internal things too (set them to non-billable). Each project belongs to a client. If the client isn't in the list yet, just type the name and it's created." /></h2>
         <form onSubmit={addProject} className="form-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
           <label className="field">Client
             <input className="input" list="clients" placeholder="e.g. Aviva" value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} required />
             <datalist id="clients">{clients.filter((c) => !c.is_internal).map((c) => <option key={c.id} value={c.name} />)}</datalist>
           </label>
           <label className="field">Project name<input className="input" placeholder="e.g. Early Careers Refresh" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></label>
-          <label className="field">Code<input className="input" placeholder={autoCode || 'AVI-EC'} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} style={{ textTransform: 'uppercase' }} /></label>
-          <label className="field">Budget (hours)<input className="input" type="number" min="0" step="0.5" placeholder="pool, e.g. 120" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} /></label>
-          <label className="field">Billable<select className="select" value={form.billable ? 'yes' : 'no'} onChange={(e) => setForm({ ...form, billable: e.target.value === 'yes' })}><option value="yes">Billable</option><option value="no">Non-billable</option></select></label>
+          <label className="field"><span className="row" style={{ gap: 4 }}>Code<Hint title="Project code" text="A short tag like AVI-EC. It appears on people's project cards and in exports, and later on it's how Outlook meetings get matched to the project: put the code anywhere in a meeting subject and it links up. Leave it blank and we'll suggest one." /></span><input className="input" placeholder={autoCode || 'AVI-EC'} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} style={{ textTransform: 'uppercase' }} /></label>
+          <label className="field"><span className="row" style={{ gap: 4 }}>Budget (hours)<Hint title="Budget" text="The total hours this project has been sold or planned for, across everyone. It drives the progress bars and On track / Nearly out / Over status in Reports. Leave it at 0 if there isn't one." /></span><input className="input" type="number" min="0" step="0.5" placeholder="pool, e.g. 120" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} /></label>
+          <label className="field"><span className="row" style={{ gap: 4 }}>Billable<Hint title="Billable" text="Billable means it's chargeable client work and counts towards someone's billable share. Non-billable is for internal things like pitches, admin and learning. Both count towards the 37.5 hour week." /></span><select className="select" value={form.billable ? 'yes' : 'no'} onChange={(e) => setForm({ ...form, billable: e.target.value === 'yes' })}><option value="yes">Billable</option><option value="no">Non-billable</option></select></label>
           <button className="btn primary" type="submit" style={{ height: 38 }}>Add project</button>
         </form>
         <span className="small muted">Type a new client name and it gets created on the spot. Keep the code short and memorable. It's what people can put in Outlook meeting subjects so meetings match up automatically later on.</span>
@@ -122,7 +123,7 @@ function Projects() {
         <div className="panel-h"><h2>Client projects</h2><label className="checkbox small"><input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Show archived</label></div>
         <div className="scroll-x">
           <table className="tbl" style={{ minWidth: 760 }}>
-            <thead><tr><th>Client</th><th>Project</th><th>Code</th><th className="num">Budget</th><th className="num">Allocated</th><th>Status</th><th /></tr></thead>
+            <thead><tr><th>Client</th><th>Project</th><th>Code</th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Budget<Hint align="right" title="Budget" text="Total hours for the project. Edit it here and it saves when you click away." /></span></th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Allocated<Hint align="right" title="Allocated" text="How the budget has been shared out to named people using the Allocate button. Pool means nobody has a specific slice yet: anyone can still log time, it's just one shared pot. Giving someone an allocation shows them a little budget bar on their own project card." /></span></th><th><span className="row" style={{ gap: 4 }}>Status<Hint title="Status" text="Archiving takes a project off everyone's list so no more time can be logged to it, but keeps every hour already logged in reports and exports. Restore brings it back." /></span></th><th /></tr></thead>
             <tbody>
               {list.map((p) => {
                 const al = allocByProject[p.id] || []
@@ -176,7 +177,7 @@ function AllocateModal({ project, people, allocs, onClose, flash }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(38,38,38,.45)', display: 'grid', placeItems: 'center', zIndex: 40, padding: 20 }} onClick={onClose}>
       <div className="panel col" style={{ width: '100%', maxWidth: 560, maxHeight: '85vh', gap: 0 }} onClick={(e) => e.stopPropagation()}>
-        <div className="panel-h"><div className="col" style={{ gap: 2 }}><h2>Allocate hours: {project.name}</h2><span className="small muted">Budget {project.budget_hours}h · allocated {total}h {project.budget_hours && total > project.budget_hours ? '(over budget)' : ''}</span></div><button className="icon-btn" aria-label="Close" onClick={onClose}><X /></button></div>
+        <div className="panel-h"><div className="col" style={{ gap: 2 }}><h2>Allocate hours: {project.name}<Hint title="Allocating" text="Give each person the hours they're expected to spend on this project. It's a guide, not a lock: people can still log more, it'll just show as over. You can allocate more than the budget if you need to, it'll warn you but won't stop you." /></h2><span className="small muted">Budget {project.budget_hours}h · allocated {total}h {project.budget_hours && total > project.budget_hours ? '(over budget)' : ''}</span></div><button className="icon-btn" aria-label="Close" onClick={onClose}><X /></button></div>
         <div className="panel-b col" style={{ gap: 10, overflow: 'auto' }}>
           <input className="input" placeholder="Find a person…" value={q} onChange={(e) => setQ(e.target.value)} />
           {visible.map((r) => (
@@ -232,7 +233,7 @@ function WorkTypes() {
   return (
     <>
       <section className="panel panel-b col" style={{ gap: 14 }}>
-        <div className="col" style={{ gap: 4 }}><h2>Work types</h2><span className="small muted">These are the pills people tap when logging time. Keep it to eight or fewer so they fit on one row.</span></div>
+        <div className="col" style={{ gap: 4 }}><h2>Work types<Hint title="Work types" text="The categories people tag their time with, like Analysis or QA. Reports break time down by these, so keep them broad enough that people don't have to think. Use the arrows to change the order they appear in." /></h2><span className="small muted">These are the pills people tap when logging time. Keep it to eight or fewer so they fit on one row.</span></div>
         <div className="row wrap" style={{ gap: 8 }}>
           {active.map((t, i) => (
             <span key={t.id} className="row" style={{ height: 36, padding: '0 6px 0 14px', borderRadius: 999, border: '1.5px solid var(--line)', background: '#fff', fontSize: 13, fontWeight: 600, gap: 8 }}>
