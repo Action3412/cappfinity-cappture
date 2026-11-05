@@ -41,7 +41,7 @@ h1 { font-size: 24px; } h2 { font-size: 15px; } h3 { font-size: 13px; }
 .logo .ring > div { width: 100%; height: 100%; border-radius: 50%; background: var(--charcoal); display: flex; align-items: center; justify-content: center; font-size: 14px; }
 .logo .dot { color: var(--pink); }
 .nav { display: flex; gap: 4px; }
-.nav a { padding: 8px 12px; border-radius: 8px; color: rgba(255,255,255,.75); font-size: 14px; }
+.nav a { white-space: nowrap; padding: 8px 12px; border-radius: 8px; color: rgba(255,255,255,.75); font-size: 14px; }
 .nav a.active { color: #fff; background: rgba(255,255,255,.12); font-weight: 600; }
 .hdr-btn { height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06); color: #fff; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 8px; }
 .hdr-btn:hover { background: rgba(255,255,255,.14); }
