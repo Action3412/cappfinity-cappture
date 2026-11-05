@@ -358,3 +358,15 @@ h1 + .hint { margin-left: 2px; }
 .ring-wrap.mini { flex: 0 0 auto; }
 .ring-wrap.mini svg circle:last-child { transition: stroke-dasharray .4s ease; }
 .ring-wrap.mini .num { pointer-events: none; }
+
+/* ---------- Filter bar ---------- */
+.filterbar { display: flex; align-items: stretch; background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 2px; box-shadow: var(--shadow); flex-wrap: wrap; }
+.filter { display: flex; flex-direction: column; gap: 1px; padding: 6px 14px 5px 12px; border-right: 1px dotted var(--line); min-width: 120px; cursor: pointer; }
+.filter:last-of-type { border-right: 0; }
+.filter > span { font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted-2); }
+.filter select, .filter input { border: 0; outline: 0; background: transparent; font-size: 13px; font-weight: 600; color: var(--charcoal); padding: 0; height: 22px; width: 100%; cursor: pointer; }
+.filter select { appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%236B6B76' stroke-width='1.5' stroke-linecap='round'/></svg>"); background-repeat: no-repeat; background-position: right 2px center; padding-right: 16px; }
+.filter:hover { background: var(--bg); border-radius: 11px; }
+.filter:focus-within { background: var(--violet-bg); border-radius: 11px; }
+.filter-clear { align-self: center; margin: 0 6px 0 2px; height: 28px; padding: 0 10px; border-radius: 8px; border: 0; background: var(--bg); font-size: 12px; font-weight: 600; color: var(--text-2); }
+.filter-clear:hover { background: var(--line-soft); }

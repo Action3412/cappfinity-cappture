@@ -166,21 +166,24 @@ export default function Reports() {
     <div className="page col" style={{ gap: 18 }}>
       <div className="row between wrap" style={{ alignItems: 'flex-end', gap: 14 }}>
         <div className="col" style={{ gap: 4 }}><span className="row" style={{ gap: 8 }}><h1>Allocated vs actual</h1><Hint title="Reports" text="Who spent how long on what. Use the filters to narrow it down by date, client, team, person or work type. Every number on this page updates to match. Export CSV gives you the raw entries behind whatever you're looking at, ready for Excel." /></span><span className="small muted">{scopeLabel}</span></div>
-        <div className="row wrap" style={{ gap: 8, alignItems: 'flex-end' }}>
-          <label className="field">Period
-            <select className="select" style={sel} value={period} onChange={(e) => setPeriod(e.target.value)}>
-              <option value="week">This week</option><option value="lastweek">Last week</option><option value="month">This month</option>
-              <option value="quarter">This quarter</option><option value="all">All time</option><option value="custom">Custom…</option>
-            </select></label>
-          {period === 'custom' && (<>
-            <label className="field">From<input type="date" className="input" style={sel} value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} /></label>
-            <label className="field">To<input type="date" className="input" style={sel} value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} /></label>
-          </>)}
-          <label className="field">Client<select className="select" style={sel} value={client} onChange={(e) => setClient(e.target.value)}><option value="all">All clients</option>{options.clients.map((c) => <option key={c}>{c}</option>)}</select></label>
-          <label className="field">Team<select className="select" style={sel} value={team} onChange={(e) => setTeam(e.target.value)}><option value="all">All teams</option>{options.teams.map((c) => <option key={c}>{c}</option>)}</select></label>
-          <label className="field">Person<select className="select" style={sel} value={person} onChange={(e) => setPerson(e.target.value)}><option value="all">Everyone</option>{options.people.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select></label>
-          <label className="field">Work type<select className="select" style={sel} value={workType} onChange={(e) => setWorkType(e.target.value)}><option value="all">All</option>{options.workTypes.map((c) => <option key={c}>{c}</option>)}</select></label>
-          <button className="btn primary" onClick={() => exportCSV()} disabled={!scoped.length}><Download /> Export CSV</button>
+        <div className="row wrap" style={{ gap: 10 }}>
+          <div className="filterbar" role="group" aria-label="Report filters">
+            <label className="filter"><span>Period</span>
+              <select value={period} onChange={(e) => setPeriod(e.target.value)}>
+                <option value="week">This week</option><option value="lastweek">Last week</option><option value="month">This month</option>
+                <option value="quarter">This quarter</option><option value="all">All time</option><option value="custom">Custom…</option>
+              </select></label>
+            {period === 'custom' && (<>
+              <label className="filter"><span>From</span><input type="date" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} /></label>
+              <label className="filter"><span>To</span><input type="date" value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} /></label>
+            </>)}
+            <label className="filter"><span>Client</span><select value={client} onChange={(e) => setClient(e.target.value)}><option value="all">All clients</option>{options.clients.map((c) => <option key={c}>{c}</option>)}</select></label>
+            <label className="filter"><span>Team</span><select value={team} onChange={(e) => setTeam(e.target.value)}><option value="all">All teams</option>{options.teams.map((c) => <option key={c}>{c}</option>)}</select></label>
+            <label className="filter"><span>Person</span><select value={person} onChange={(e) => setPerson(e.target.value)}><option value="all">Everyone</option>{options.people.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select></label>
+            <label className="filter"><span>Work type</span><select value={workType} onChange={(e) => setWorkType(e.target.value)}><option value="all">All types</option>{options.workTypes.map((c) => <option key={c}>{c}</option>)}</select></label>
+            {(client !== 'all' || team !== 'all' || person !== 'all' || workType !== 'all') && <button type="button" className="filter-clear" onClick={() => { setClient('all'); setTeam('all'); setPerson('all'); setWorkType('all') }} aria-label="Clear filters">Clear</button>}
+          </div>
+          <button className="btn primary" style={{ height: 48, borderRadius: 14 }} onClick={() => exportCSV()} disabled={!scoped.length}><Download /> Export CSV</button>
         </div>
       </div>
 

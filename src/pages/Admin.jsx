@@ -357,7 +357,7 @@ function People() {
   const [weeks, setWeeks] = useState({})
   const [activity, setActivity] = useState({})
   const [, setTick] = useState(0)
-  const [inv, setInv] = useState({ email: '', full_name: '', team_id: '', role: 'member' })
+  const [inv, setInv] = useState({ email: '', full_name: '', team_id: '', role: 'member', manager_id: '' })
   const [issued, setIssued] = useState(null) // { name, email, password, kind }
   const [busy, setBusy] = useState(false)
   const [newTeam, setNewTeam] = useState('')
@@ -392,9 +392,9 @@ function People() {
     e.preventDefault(); const email = inv.email.trim().toLowerCase(); if (!email) return
     setBusy(true)
     try {
-      const r = await callAdmin({ action: 'invite', email, full_name: inv.full_name.trim(), team_id: inv.team_id || null, role: inv.role })
+      const r = await callAdmin({ action: 'invite', email, full_name: inv.full_name.trim(), team_id: inv.team_id || null, role: inv.role, manager_id: inv.manager_id || null })
       setIssued({ kind: 'invite', name: inv.full_name.trim() || email, email: r.email, password: r.password })
-      setInv({ email: '', full_name: '', team_id: '', role: 'member' }); load()
+      setInv({ email: '', full_name: '', team_id: '', role: 'member', manager_id: '' }); load()
     } catch (ex) { flash(ex.message) } finally { setBusy(false) }
   }
   async function resetPassword(u) {
@@ -420,11 +420,12 @@ function People() {
     <>
       <section className="panel panel-b col" style={{ gap: 12 }}>
         <h2>Invite someone<Hint title="Inviting people" text="Add their name, work email, team and role and their account is created straight away with a one-time password for you to pass on. Member: logs their own time. Manager: also sees Reports for their team and can send reminders. Admin: everything, including this page." /></h2>
-        <form onSubmit={sendInvite} className="form-grid" style={{ gridTemplateColumns: 'minmax(150px, 1.4fr) minmax(200px, 2fr) minmax(130px, 1.1fr) minmax(110px, 1fr) auto' }}>
+        <form onSubmit={sendInvite} className="form-grid" style={{ gridTemplateColumns: 'minmax(140px, 1.3fr) minmax(180px, 1.8fr) minmax(120px, 1fr) minmax(100px, .9fr) minmax(140px, 1.2fr) auto' }}>
           <label className="field">Name<input className="input" required placeholder="e.g. Beth Wilson" value={inv.full_name} onChange={(e) => setInv({ ...inv, full_name: e.target.value })} /></label>
           <label className="field">Work email<input className="input" type="email" required placeholder="name@cappfinity.com" value={inv.email} onChange={(e) => setInv({ ...inv, email: e.target.value })} /></label>
           <label className="field">Team<select className="select" value={inv.team_id} onChange={(e) => setInv({ ...inv, team_id: e.target.value })}><option value="">No team yet</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
           <label className="field">Role<select className="select" value={inv.role} onChange={(e) => setInv({ ...inv, role: e.target.value })}><option value="member">Member</option><option value="manager">Manager</option><option value="admin">Admin</option></select></label>
+          <label className="field">Reports to<select className="select" value={inv.manager_id} onChange={(e) => setInv({ ...inv, manager_id: e.target.value })}><option value="">Nobody yet</option>{people.filter((u) => u.active && u.role !== 'member').map((u) => <option key={u.id} value={u.id}>{u.full_name || u.email}</option>)}</select></label>
           <button className="btn primary" type="submit" style={{ height: 38 }} disabled={busy}>{busy ? 'Creating…' : 'Create account'}</button>
         </form>
         <span className="small muted">This creates their account on the spot and gives you a one-time password to pass on (Teams is fine). No email links, which Outlook's link scanner tends to break. They sign in with the password, then set their own from the menu under their name.</span>
@@ -457,8 +458,8 @@ function People() {
       <section className="panel" style={{ overflow: 'hidden' }}>
         <div className="panel-h"><h2>People</h2><div className="row"><input className="input" placeholder="Find…" value={q} onChange={(e) => setQ(e.target.value)} style={{ height: 32, width: 180 }} /><span className="small muted">{people.filter((u) => u.active).length} active</span></div></div>
         <div className="scroll-x">
-          <table className="tbl" style={{ minWidth: 820 }}>
-            <thead><tr><th>Name</th><th><span className="row" style={{ gap: 4 }}>Team<Hint title="Team" text="Which team someone sits in. Managers see Reports for their own team, and you can filter Reports by team." /></span></th><th><span className="row" style={{ gap: 4 }}>Role<Hint title="Role" text="Member: logs their own time. Manager: also sees their team's time in Reports and can chase people. Admin: can do everything, including add projects and people. You can't change your own role, to stop you locking yourself out." /></span></th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Target<Hint align="right" title="Weekly target" text="Hours this person is expected to log each week. 37.5 for full time. Set it lower for part-timers so they aren't flagged as short every week." /></span></th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Last week<Hint align="right" title="Last week" text="Whether they hit their target last week, and if not, by how much." /></span></th><th><span className="row" style={{ gap: 4 }}>Activity<Hint title="Activity" text="A green dot means they have Cappture open right now (seen in the last five minutes). Underneath is when they last signed in. Hover for exact times. Never means they haven't signed in yet." /></span></th><th /></tr></thead>
+          <table className="tbl" style={{ minWidth: 1000 }}>
+            <thead><tr><th>Name</th><th><span className="row" style={{ gap: 4 }}>Team<Hint title="Team" text="Which team someone sits in. It's a grouping for Reports (filter by team); who can see whose time is set by Reports to." /></span></th><th><span className="row" style={{ gap: 4 }}>Role<Hint title="Role" text="Member: logs their own time. Manager: also sees the time of people who report to them, in Reports, and can chase them. Admin: can do everything, including add projects and people. You can't change your own role, to stop you locking yourself out." /></span></th><th><span className="row" style={{ gap: 4 }}>Reports to<Hint title="Reports to" text="Their line manager. This decides whose time a manager can see and chase, and who gets copied on the Monday reminder. Only managers and admins appear in the list." /></span></th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Target<Hint align="right" title="Weekly target" text="Hours this person is expected to log each week. 37.5 for full time. Set it lower for part-timers so they aren't flagged as short every week." /></span></th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Last week<Hint align="right" title="Last week" text="Whether they hit their target last week, and if not, by how much." /></span></th><th><span className="row" style={{ gap: 4 }}>Activity<Hint title="Activity" text="A green dot means they have Cappture open right now (seen in the last five minutes). Underneath is when they last signed in. Hover for exact times. Never means they haven't signed in yet." /></span></th><th /></tr></thead>
             <tbody>
               {list.filter((u) => u.active).map((u) => {
                 const lw = weeks[u.id]
@@ -467,6 +468,7 @@ function People() {
                     <td><div className="row" style={{ gap: 10 }}><span className="avatar sm" style={{ background: av(u.full_name || u.email) }}>{initials(u.full_name || u.email)}</span><div className="col" style={{ gap: 0 }}><b>{u.full_name || '—'}</b><span className="tiny muted">{u.email}</span></div></div></td>
                     <td><select className="select" style={{ height: 32, width: 150 }} value={u.team_id || ''} onChange={(e) => patch(u, { team_id: e.target.value || null })}><option value="">No team</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></td>
                     <td><select className="select" style={{ height: 32, width: 120 }} value={u.role} onChange={(e) => patch(u, { role: e.target.value })} disabled={u.id === me.id}><option value="member">Member</option><option value="manager">Manager</option><option value="admin">Admin</option></select></td>
+                    <td><select className="select" style={{ height: 32, width: 150 }} value={u.manager_id || ''} onChange={(e) => patch(u, { manager_id: e.target.value || null })}><option value="">Nobody</option>{people.filter((m) => m.active && m.id !== u.id && m.role !== 'member').map((m) => <option key={m.id} value={m.id}>{m.full_name || m.email}</option>)}</select></td>
                     <td className="num"><input className="input" type="number" min="0" max="60" step="0.5" defaultValue={u.weekly_target} onBlur={(e) => Number(e.target.value) !== Number(u.weekly_target) && patch(u, { weekly_target: Number(e.target.value) })} style={{ width: 70, height: 32, textAlign: 'right' }} aria-label="Weekly target" /></td>
                     <td className="num" style={{ fontWeight: 600, color: lw === undefined ? 'var(--ok)' : lw.logged === 0 ? 'var(--bad)' : 'var(--warn)' }} title={lw ? `${fmtHours(lw.logged)} logged` : ''}>{lw === undefined ? 'On target' : lw.logged === 0 ? 'Nothing logged' : `${fmtHours(lw.short)} short`}</td>
                     <td>{(() => { const act = activity[u.id] || {}; const online = act.last_seen_at && (Date.now() - new Date(act.last_seen_at).getTime()) < 5 * 60000
