@@ -124,12 +124,17 @@ function EntryBlock({ e, top, project, workType, editing, onOpen, onResize, onMo
   function move(ev) {
     const g = gesture.current; if (!g) return
     const dx = ev.clientX - g.startX, dy = ev.clientY - g.startY
-    if (g.mode === 'resize') { g.moved = true; setPreview({ start: g.startT, hours: snapH(g.startH + dy / PX_PER_HOUR) }); return }
+    if (g.mode === 'resize') {
+      g.moved = true
+      g.preview = { start: g.startT, hours: snapH(g.startH + dy / PX_PER_HOUR) }
+      setPreview(g.preview); return
+    }
     if (g.mode === 'resize-top') {
       g.moved = true
       const end = g.startT + g.startH
       const ns = Math.min(end - MIN_H, snapT(g.startT + dy / PX_PER_HOUR))
-      setPreview({ start: ns, hours: Math.round((end - ns) * 4) / 4 }); return
+      g.preview = { start: ns, hours: Math.round((end - ns) * 4) / 4 }
+      setPreview(g.preview); return
     }
     if (!g.moved && Math.hypot(dx, dy) < 6) return
     if (!g.moved) document.body.classList.add('dragging')
@@ -141,7 +146,7 @@ function EntryBlock({ e, top, project, workType, editing, onOpen, onResize, onMo
   function up(ev) {
     const g = gesture.current; endGesture(); if (!g) return
     if (g.mode === 'resize' || g.mode === 'resize-top') {
-      const p = preview; setPreview(null)
+      const p = g.preview; setPreview(null)
       if (g.moved && p && (p.hours !== e.hours || p.start !== startOf(e))) onResize(e, p.hours, p.start)
       return
     }
