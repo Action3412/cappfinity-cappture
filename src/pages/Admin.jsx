@@ -281,7 +281,9 @@ function People() {
   const [invites, setInvites] = useState([])
   const [teams, setTeams] = useState([])
   const [weeks, setWeeks] = useState({})
-  const [inv, setInv] = useState({ email: '', team_id: '', role: 'member' })
+  const [inv, setInv] = useState({ email: '', full_name: '', team_id: '', role: 'member' })
+  const [issued, setIssued] = useState(null) // { name, email, password, kind }
+  const [busy, setBusy] = useState(false)
   const [newTeam, setNewTeam] = useState('')
   const [q, setQ] = useState('')
   const [toast, flash] = useToast()
@@ -298,13 +300,31 @@ function People() {
   }
   useEffect(() => { load() }, [])
 
+  async function callAdmin(payload) {
+    const { data, error } = await supabase.functions.invoke('admin-users', { body: payload })
+    if (error) {
+      let msg = error.message
+      try { const j = await error.context?.json?.(); if (j?.error) msg = j.error } catch {}
+      throw new Error(msg)
+    }
+    if (data?.error) throw new Error(data.error)
+    return data
+  }
   async function sendInvite(e) {
     e.preventDefault(); const email = inv.email.trim().toLowerCase(); if (!email) return
-    const { error } = await supabase.from('invites').insert({ email, team_id: inv.team_id || null, role: inv.role, invited_by: me.id })
-    if (error) { flash(error.code === '23505' ? 'Already invited' : error.message); return }
-    const { error: e2 } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin, shouldCreateUser: true } })
-    flash(e2 ? `Invite saved, but the email failed: ${e2.message}` : `Sign-in link sent to ${email}`)
-    setInv({ email: '', team_id: '', role: 'member' }); load()
+    setBusy(true)
+    try {
+      const r = await callAdmin({ action: 'invite', email, full_name: inv.full_name.trim(), team_id: inv.team_id || null, role: inv.role })
+      setIssued({ kind: 'invite', name: inv.full_name.trim() || email, email: r.email, password: r.password })
+      setInv({ email: '', full_name: '', team_id: '', role: 'member' }); load()
+    } catch (ex) { flash(ex.message) } finally { setBusy(false) }
+  }
+  async function resetPassword(u) {
+    if (!confirm(`Give ${u.full_name || u.email} a new temporary password? Their current one stops working.`)) return
+    try {
+      const r = await callAdmin({ action: 'reset-password', profile_id: u.id })
+      setIssued({ kind: 'reset', name: u.full_name || u.email, email: r.email, password: r.password })
+    } catch (ex) { flash(ex.message) }
   }
   async function patch(u, f) {
     const { error } = await supabase.from('profiles').update(f).eq('id', u.id)
@@ -321,15 +341,32 @@ function People() {
   return (
     <>
       <section className="panel panel-b col" style={{ gap: 12 }}>
-        <h2>Invite someone<Hint title="Inviting people" text="Add someone's work email, team and role and they'll be set up the moment they first sign in. Member: logs their own time. Manager: also sees Reports for their team and can send reminders. Admin: everything, including this page." /></h2>
-        <form onSubmit={sendInvite} className="form-grid" style={{ gridTemplateColumns: 'minmax(200px, 2fr) minmax(140px, 1fr) minmax(120px, 1fr) auto' }}>
+        <h2>Invite someone<Hint title="Inviting people" text="Add their name, work email, team and role and their account is created straight away with a one-time password for you to pass on. Member: logs their own time. Manager: also sees Reports for their team and can send reminders. Admin: everything, including this page." /></h2>
+        <form onSubmit={sendInvite} className="form-grid" style={{ gridTemplateColumns: 'minmax(150px, 1.4fr) minmax(200px, 2fr) minmax(130px, 1.1fr) minmax(110px, 1fr) auto' }}>
+          <label className="field">Name<input className="input" required placeholder="e.g. Beth Wilson" value={inv.full_name} onChange={(e) => setInv({ ...inv, full_name: e.target.value })} /></label>
           <label className="field">Work email<input className="input" type="email" required placeholder="name@cappfinity.com" value={inv.email} onChange={(e) => setInv({ ...inv, email: e.target.value })} /></label>
           <label className="field">Team<select className="select" value={inv.team_id} onChange={(e) => setInv({ ...inv, team_id: e.target.value })}><option value="">No team yet</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
           <label className="field">Role<select className="select" value={inv.role} onChange={(e) => setInv({ ...inv, role: e.target.value })}><option value="member">Member</option><option value="manager">Manager</option><option value="admin">Admin</option></select></label>
-          <button className="btn primary" type="submit" style={{ height: 38 }}>Send invite</button>
+          <button className="btn primary" type="submit" style={{ height: 38 }} disabled={busy}>{busy ? 'Creating…' : 'Create account'}</button>
         </form>
-        <span className="small muted">They get a sign-in email and land straight in their week with the right team and role. Anyone with a cappfinity.com address can also just sign in and will arrive as a member. Managers see their team's time, admins see everything.</span>
-        {invites.length > 0 && <div className="col" style={{ gap: 4 }}><span className="label">Waiting to sign in</span>{invites.map((i) => <div className="row between small" key={i.id} style={{ borderBottom: '1px dotted var(--line)', padding: '6px 0' }}><span>{i.email} <span className="muted">· {i.role}</span></span><button className="btn sm ghost danger" onClick={() => cancelInvite(i)}>Cancel</button></div>)}</div>}
+        <span className="small muted">This creates their account on the spot and gives you a one-time password to pass on (Teams is fine). No email links, which Outlook's link scanner tends to break. They sign in with the password, then set their own from the menu under their name.</span>
+        {issued && (
+          <div className="issued">
+            <div className="row between" style={{ alignItems: 'flex-start' }}>
+              <div className="col" style={{ gap: 2 }}>
+                <b>{issued.kind === 'invite' ? `${issued.name} is set up` : `New temporary password for ${issued.name}`}</b>
+                <span className="small" style={{ opacity: .75 }}>Shown once. Copy it now and send it to them; it isn't stored anywhere you can get it back.</span>
+              </div>
+              <button className="icon-btn" aria-label="Dismiss" onClick={() => setIssued(null)} style={{ color: '#fff' }}><X /></button>
+            </div>
+            <div className="row wrap" style={{ gap: 10, marginTop: 10 }}>
+              <code className="issued-pw">{issued.password}</code>
+              <button className="btn sm" onClick={() => { navigator.clipboard?.writeText(issued.password); flash('Password copied') }}>Copy password</button>
+              <button className="btn sm" onClick={() => { navigator.clipboard?.writeText(`Hi ${issued.name.split(' ')[0]}, I've set you up on Cappture, our new time-logging tool.\n\nSign in here: ${window.location.origin}\nEmail: ${issued.email}\nTemporary password: ${issued.password}\n\nUse "I have a password" on the sign-in page, then set your own password from the menu under your name (top right). Takes a minute.`); flash('Message copied, paste it into Teams') }}>Copy Teams message</button>
+            </div>
+          </div>
+        )}
+        {invites.length > 0 && <div className="col" style={{ gap: 4 }}><span className="label">Invited, not yet signed in</span>{invites.map((i) => <div className="row between small" key={i.id} style={{ borderBottom: '1px dotted var(--line)', padding: '6px 0' }}><span>{i.email} <span className="muted">· {i.role}</span></span><button className="btn sm ghost danger" onClick={() => cancelInvite(i)}>Cancel</button></div>)}</div>}
       </section>
 
       {pending.length > 0 && (
@@ -355,7 +392,10 @@ function People() {
                     <td className="num"><input className="input" type="number" min="0" max="60" step="0.5" defaultValue={u.weekly_target} onBlur={(e) => Number(e.target.value) !== Number(u.weekly_target) && patch(u, { weekly_target: Number(e.target.value) })} style={{ width: 70, height: 32, textAlign: 'right' }} aria-label="Weekly target" /></td>
                     <td className="num" style={{ fontWeight: 600, color: lw === undefined ? 'var(--ok)' : lw === 0 ? 'var(--bad)' : 'var(--warn)' }}>{lw === undefined ? 'On target' : `${fmtHours(lw)} short`}</td>
                     <td><span className={`tag ${u.calendar_connected ? 'ok' : 'grey'}`}>{u.calendar_connected ? 'Outlook linked' : 'No Outlook'}</span></td>
-                    <td className="num">{u.id !== me.id && <button className="btn sm danger" onClick={() => { if (confirm(`Remove ${u.full_name || u.email} from Cappture? Their logged time stays in reports.`)) patch(u, { active: false }) }}>Remove</button>}</td>
+                    <td className="num"><div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+                      <button className="btn sm" onClick={() => resetPassword(u)} title="Issue a new temporary password">Reset password</button>
+                      {u.id !== me.id && <button className="btn sm danger" onClick={() => { if (confirm(`Remove ${u.full_name || u.email} from Cappture? Their logged time stays in reports.`)) patch(u, { active: false }) }}>Remove</button>}
+                    </div></td>
                   </tr>
                 )
               })}
