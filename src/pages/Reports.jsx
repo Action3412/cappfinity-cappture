@@ -6,6 +6,8 @@ import { downloadCSV } from '../lib/data.js'
 import { initials } from '../components/Shell.jsx'
 import { ChevronR, Download } from '../components/Icons.jsx'
 import Hint from '../components/Hint.jsx'
+import { WeeklyColumns, HBars, Donut, PersonWeekGrid, CAT, BILLABLE } from '../components/Charts.jsx'
+import { shortDate, dayName } from '../lib/time.js'
 
 const AVATARS = ['#FDE9A8', '#D8CFFE', '#FED3FB', '#C9D6FD', '#DDEFE5', '#F6D5C9']
 const av = (n = '') => AVATARS[[...n].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATARS.length]
@@ -100,6 +102,37 @@ export default function Reports() {
     return Object.entries(m).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ k, v, w: Math.round((v / max) * 100) }))
   }, [scoped])
 
+  // ---- chart data (all within the current filters)
+  const weekly = useMemo(() => {
+    const m = new Map()
+    scoped.forEach((r) => { const k = r.week_start; if (!m.has(k)) m.set(k, { label: shortDate(k), billable: 0, internal: 0, key: k }); m.get(k)[r.billable ? 'billable' : 'internal'] += r.hours })
+    return [...m.values()].sort((a, b) => a.key.localeCompare(b.key)).slice(-12)
+  }, [scoped])
+  const peopleInScope = new Set(scoped.map((r) => r.profile_id)).size
+  const weeklyTarget = peopleInScope * 37.5
+  const byClient = useMemo(() => {
+    const m = {}; scoped.forEach((r) => { m[r.client] = (m[r.client] || 0) + r.hours })
+    return Object.entries(m).sort((a, b) => b[1] - a[1]).map(([label, value]) => ({ label, value }))
+  }, [scoped])
+  const wtOrder = useMemo(() => [...new Set(rows.map((r) => r.work_type || 'Uncategorised'))].sort(), [rows])
+  const donut = useMemo(() => {
+    const m = {}; scoped.forEach((r) => { const k = r.work_type || 'Uncategorised'; m[k] = (m[k] || 0) + r.hours })
+    const all = wtOrder.map((k, i) => ({ label: k, value: m[k] || 0, colour: CAT[i % CAT.length] })).filter((d) => d.value > 0).sort((a, b) => b.value - a.value)
+    if (all.length <= 6) return all
+    const top = all.slice(0, 5), rest = all.slice(5).reduce((a, d) => a + d.value, 0)
+    return [...top, { label: 'Other', value: rest, colour: '#A2A2AB' }]
+  }, [scoped, wtOrder])
+  const billableByPerson = useMemo(() => {
+    const m = {}; scoped.forEach((r) => { const k = r.person || r.email; m[k] ||= { b: 0, t: 0 }; m[k].t += r.hours; if (r.billable) m[k].b += r.hours })
+    return Object.entries(m).map(([label, v]) => ({ label, value: v.t ? Math.round((v.b / v.t) * 100) : 0, sub: `${fmtHours(v.b)} of ${fmtHours(v.t)}` })).sort((a, b) => b.value - a.value)
+  }, [scoped])
+  const grid = useMemo(() => {
+    const dows = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+    const m = {}
+    scoped.forEach((r) => { const k = r.person || r.email; m[k] ||= { name: k, cells: [0, 0, 0, 0, 0], total: 0 }; const i = dows.indexOf(dayName(r.entry_date)); if (i >= 0) m[k].cells[i] += r.hours; m[k].total += r.hours })
+    return { days: dows, people: Object.values(m).sort((a, b) => b.total - a.total).slice(0, 12) }
+  }, [scoped])
+
   function exportCSV(subset = scoped, name = 'cappture') {
     downloadCSV(`${name}-${from}-to-${to}.csv`, subset, [
       { label: 'Date', value: 'entry_date' }, { label: 'Week starting', value: 'week_start' },
@@ -158,6 +191,37 @@ export default function Reports() {
         <div className="kpi"><span className="small muted">Short of target last week<Hint align="right" title="Short of target" text="People who logged less than their weekly target (normally 37.5h) last week. The full list, with a Remind button for each, is further down the page." /></span><b style={{ color: shortfalls.length ? 'var(--bad)' : 'var(--ok)' }}>{shortfalls.length}</b><span className="small muted">{isAdmin ? 'across everyone' : 'in your team'} · week of {longDate(lastWeek)}</span></div>
       </div>
 
+      {!loading && scoped.length > 0 && (
+        <>
+          <div className="charts">
+            <section className="panel panel-b col" style={{ gap: 6 }}>
+              <div className="row between"><h2>Hours by week<Hint title="Hours by week" text="Each column is a week in the range, billable in blue and internal in grey, with the total on top. The dashed line is what the people in scope would log if they all hit 37.5, so a column well below it means time isn't being captured." /></h2><span className="tiny muted">{weekly.length > 11 ? 'last 12 weeks' : ''}</span></div>
+              <WeeklyColumns data={weekly} target={weeklyTarget} />
+            </section>
+            <section className="panel panel-b col" style={{ gap: 6 }}>
+              <h2>Where the time went<Hint title="Where the time went" text="Share of hours by work type within the current filters. Handy for spotting a project that's all meetings and no delivery, or a team where QA is getting squeezed." /></h2>
+              <Donut data={donut} centreLabel="logged" centreValue={fmtHours(totalLogged).replace(/ \d+$/, '')} />
+            </section>
+          </div>
+          <div className="charts-2">
+            <section className="panel panel-b col" style={{ gap: 6 }}>
+              <h2>Hours by client<Hint title="Hours by client" text="Total hours per client in the current filters, biggest first. Internal shows up here too so you can see client work against everything else." /></h2>
+              <HBars data={byClient} />
+            </section>
+            <section className="panel panel-b col" style={{ gap: 6 }}>
+              <h2>Billable share by person<Hint title="Billable share" text="The percentage of each person's logged hours that went on client work, highest first. Hover for the hours behind it. Low isn't necessarily bad: pitch and leadership roles will sit lower." /></h2>
+              <HBars data={billableByPerson} format={(v) => String(v)} suffix="%" max={100} colour={BILLABLE} />
+            </section>
+          </div>
+          {grid.people.length > 1 && (
+            <section className="panel panel-b col" style={{ gap: 8 }}>
+              <h2>Who logged what, by weekday<Hint title="By weekday" text="Hours per person per weekday across the range, darker is more. Pale Fridays and empty Mondays usually mean people are catching up at the end of the week rather than logging as they go." /></h2>
+              <PersonWeekGrid people={grid.people} days={grid.days} />
+            </section>
+          )}
+        </>
+      )}
+
       <div className="row wrap" style={{ gap: 18, alignItems: 'flex-start' }}>
         <section className="panel" style={{ flex: '999 1 600px', minWidth: 0, overflow: 'hidden' }}>
           <div className="panel-h"><h2>By client and project<Hint title="By client and project" text="Grouped by client, then project. Click a project row to open it up and see each person's hours split by work type. Download this project gives you just that project's entries as a CSV." /></h2><div className="row"><span className="small muted">Click a project to see who logged what</span>{isAdmin && <span className="row" style={{ gap: 4 }}><button className="btn sm" onClick={() => setShowRates((s) => !s)}>{showRates ? 'Hide' : 'Show'} rates</button><Hint align="right" title="Rates" text="Adds a rate column to the people breakdown so you can see cost or value against hours. Admins only. Rates aren't set up yet, so it shows 'not set' for now." /></span>}</div></div>
@@ -176,17 +240,6 @@ export default function Reports() {
         </section>
 
         <aside className="col" style={{ flex: '1 1 300px', maxWidth: 380, gap: 14 }}>
-          <div className="panel panel-b col" style={{ gap: 10 }}>
-            <h2>Where the time went<Hint title="Where the time went" text="Hours by work type within the current filters. Handy for spotting if a project is all meetings and no delivery, or if QA is getting squeezed." /></h2><span className="small muted">By work type in this scope</span>
-            {mix.map((m) => (
-              <div className="col" style={{ gap: 4 }} key={m.k}>
-                <div className="row between small"><b>{m.k}</b><span className="muted">{fmtHours(m.v)} · {totalLogged ? Math.round((m.v / totalLogged) * 100) : 0}%</span></div>
-                <div className="bar" style={{ height: 8 }}><div style={{ width: `${m.w}%`, background: 'var(--violet)' }} /></div>
-              </div>
-            ))}
-            {!mix.length && <span className="small muted">Nothing yet.</span>}
-          </div>
-
           <div className="panel panel-b col" style={{ gap: 10 }}>
             <div className="row between"><h2>Short of target last week<Hint title="Short of target" text="Anyone who logged less than their weekly target last week, with how far short they were. Remind notes that you've chased them so nobody gets nudged twice. Once the Outlook phase is in, the Friday and Monday emails go out automatically." /></h2>{shortfalls.some((s) => !s.reminded_at) && <button className="btn sm primary" onClick={remindAll}>Remind all</button>}</div>
             <span className="small muted">Week of {longDate(lastWeek)}. Automatic Friday and Monday emails arrive with the Outlook phase. Until then use this to chase by hand.</span>
