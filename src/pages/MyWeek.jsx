@@ -8,6 +8,7 @@ import Ring from '../components/Ring.jsx'
 import { ChevronL, ChevronR, Repeat, Search, Plus, Pencil, Calendar, Check, Info } from '../components/Icons.jsx'
 import Hint from '../components/Hint.jsx'
 import WeekPicker from '../components/WeekPicker.jsx'
+import { DayColumn, EntryPopover } from '../components/DayBoard.jsx'
 
 const DEFAULT_CHUNKS = [
   { label: '30m', hours: 0.5 }, { label: '1h', hours: 1 }, { label: '2h', hours: 2 },
@@ -34,6 +35,7 @@ export default function MyWeek() {
   const [clientFilter, setClientFilter] = useState('all')
   const [collapsed, setCollapsed] = useState(() => { try { return JSON.parse(localStorage.getItem('cappture.collapsed') || '{}') } catch { return {} } })
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [editing, setEditing] = useState(null) // { id, anchor }
   const [dragging, setDragging] = useState(null)
   const [over, setOver] = useState(null)
   const [toast, setToast] = useState('')
@@ -51,7 +53,7 @@ export default function MyWeek() {
       ])
       setProjects(p); setWorkTypes(w); setTotals(t); setSuggestions(s)
       const am = {}; a.forEach((r) => { am[r.project_id] = Number(r.hours) }); setAllocs(am)
-      setEntries(e.map((x) => ({ ...x, hours: Number(x.hours), editing: false })))
+      setEntries(e.map((x) => ({ ...x, hours: Number(x.hours) })))
     } catch (ex) { setErr(ex.message || String(ex)) }
     finally { setLoading(false) }
   }, [user.id, days])
@@ -102,35 +104,35 @@ export default function MyWeek() {
   const weekTotal = entries.reduce((a, e) => a + (e.hours || 0), 0)
   const billable = entries.reduce((a, e) => a + ((projById[e.project_id]?.billable) ? e.hours || 0 : 0), 0)
   const remaining = Math.max(0, weeklyTarget - weekTotal)
-  const hasDraft = entries.some((e) => e.draft)
 
-  function addEntry(projectId, date) {
+  // Dropping a project creates a one-hour block straight away, then opens the editor on it.
+  async function addEntry(projectId, date, anchorAfter = true) {
     if (!projById[projectId]) return
-    setEntries((es) => [...es.map((e) => ({ ...e, editing: false })), {
-      id: 'tmp-' + Math.random().toString(36).slice(2), project_id: projectId, work_type_id: null,
-      entry_date: date, hours: 0, note: '', source: 'manual', editing: true, draft: true,
-    }])
     setDragging(null); setOver(null)
+    try {
+      const row = await insertEntry({ profile_id: user.id, project_id: projectId, work_type_id: null, entry_date: date, hours: 1, note: null, source: 'manual' })
+      const e = { ...row, hours: Number(row.hours) }
+      setEntries((es) => [...es, e])
+      refreshTotals()
+      if (anchorAfter) setTimeout(() => {
+        const el = document.querySelector(`[data-day="${date}"] .block:last-of-type`)
+        setEditing({ id: e.id, anchor: el })
+      }, 30)
+    } catch (ex) { flash(ex.message) }
   }
   const patch = (id, f) => setEntries((es) => es.map((e) => (e.id === id ? { ...e, ...f } : e)))
 
-  async function save(e) {
-    if (!e.hours || e.hours <= 0) { flash('Pick how long first'); return }
-    try {
-      if (e.draft) {
-        const row = await insertEntry({ profile_id: user.id, project_id: e.project_id, work_type_id: e.work_type_id, entry_date: e.entry_date, hours: e.hours, note: e.note || null, source: e.source })
-        setEntries((es) => es.map((x) => (x.id === e.id ? { ...row, hours: Number(row.hours), editing: false } : x)))
-      } else {
-        await updateEntry(e.id, { work_type_id: e.work_type_id, hours: e.hours, note: e.note || null })
-        patch(e.id, { editing: false })
-      }
-      setTotals((t) => ({ ...t })) // nudge
-      refreshTotals()
-    } catch (ex) { flash(ex.message) }
+  // Optimistic update, then persist. Roll back if the save fails.
+  async function commit(e, fields) {
+    const before = { ...e }
+    patch(e.id, fields)
+    try { await updateEntry(e.id, fields); refreshTotals() }
+    catch (ex) { patch(e.id, before); flash(ex.message) }
   }
   async function remove(e) {
+    setEditing(null)
     setEntries((es) => es.filter((x) => x.id !== e.id))
-    if (!e.draft) { try { await deleteEntry(e.id); refreshTotals() } catch (ex) { flash(ex.message); load() } }
+    try { await deleteEntry(e.id); refreshTotals() } catch (ex) { flash(ex.message); load() }
   }
   async function refreshTotals() { try { setTotals(await fetchMyProjectTotals(user.id)) } catch {} }
 
@@ -155,18 +157,19 @@ export default function MyWeek() {
 
   // ---- drag & drop
   const onDragStart = (p) => (ev) => { ev.dataTransfer.setData('text/plain', p.id); ev.dataTransfer.effectAllowed = 'copy'; setDragging(p.id) }
-  const onDrop = (date) => (ev) => { ev.preventDefault(); const id = ev.dataTransfer.getData('text/plain') || dragging; if (id) addEntry(id, date) }
+  const onDropProject = (ev, date) => { const id = ev.dataTransfer.getData('text/plain') || dragging; if (id) addEntry(id, date) }
   const quickAddDate = days.includes(today()) ? today() : days[0]
 
   const t = today()
   const isCurrentWeek = ws === weekStart(t)
+  const editingEntry = editing ? entries.find((x) => x.id === editing.id) : null
 
   return (
     <div className="page">
       <div className="row between wrap" style={{ marginBottom: 18, gap: 12 }}>
         <div className="row" style={{ gap: 12 }}>
           <h1>My week</h1>
-          <Hint title="How this works" text="Drag a project from the left onto a day, or click it to add it to today. Pick how long, pick what kind of work, save. Do that until the ring on the right fills up and you're done for the week." />
+          <Hint title="How this works" text="Drag a project from the left onto a day and it lands as a one-hour block. Pull the block's bottom edge to make it longer or shorter, drag it to another day if you got the day wrong, and click it to set the work type or add a note. Keep going until each day is full and the ring on the right completes." />
           <div className="row" style={{ gap: 2, position: 'relative' }}>
             <button className="btn sm ghost" aria-label="Previous week" title="Previous week (←)" onClick={() => nav(`/week/${addDays(ws, -7)}`)}><ChevronL /></button>
             <button type="button" className="week-nav-btn" onClick={() => setPickerOpen((o) => !o)} aria-haspopup="dialog" aria-expanded={pickerOpen} title="Pick a week">
@@ -244,32 +247,19 @@ export default function MyWeek() {
         {/* Week board */}
         <main className="week-main">
           <div className="days">
-            {days.map((d) => {
-              const list = entries.filter((e) => e.entry_date === d)
-              const tot = list.reduce((a, e) => a + (e.hours || 0), 0)
-              const pct = Math.min(100, Math.round((tot / dayHours) * 100))
-              const state = tot >= dayHours ? 'done' : d > t ? (tot > 0 ? 'part' : 'future') : tot > 0 ? 'part' : 'short'
-              const left = Math.max(0, dayHours - tot)
-              const status = state === 'done' ? 'Done' : state === 'part' ? `${fmtHours(left)} to go` : state === 'short' ? 'Nothing logged' : ''
-              return (
-                <section key={d} className={`day st-${state} ${d === t ? 'today' : ''} ${over === d ? 'over' : ''}`}
-                  onDragOver={(ev) => { ev.preventDefault(); if (over !== d) setOver(d) }} onDragLeave={() => over === d && setOver(null)} onDrop={onDrop(d)}>
-                  <div className="day-progress" aria-hidden="true"><div style={{ width: `${pct}%` }} /></div>
-                  <div className="row between" style={{ padding: '2px 6px' }}>
-                    <div className="row" style={{ gap: 6, alignItems: 'baseline' }}><b>{dayName(d)}</b><span className="small muted">{shortDate(d)}</span>{d === t && <span className="today-pip">Today</span>}</div>
-                    <span className="small row day-total" style={{ gap: 4, fontWeight: 600 }}>{state === 'done' && <Check width="13" height="13" />}{fmtHours(tot)}{d === days[0] && <Hint size={12} align="right" title="Day total" text={`Hours logged on this day. The column turns green once you reach a full working day (${dayHours}h), gold while it's part done, and pink if a day has passed with nothing or not enough on it. Future days stay grey.`} />}</span>
-                  </div>
-                  {list.map((e) => (
-                    <EntryCard key={e.id} e={e} project={projById[e.project_id]} workType={wtById[e.work_type_id]} workTypes={workTypes} chunks={chunks}
-                      onEdit={() => setEntries((es) => es.map((x) => ({ ...x, editing: x.id === e.id })))}
-                      onChange={(f) => patch(e.id, f)} onSave={() => save(e)} onRemove={() => remove(e)} />
-                  ))}
-                  {status && list.length > 0 && <div className={`day-status`}>{status}</div>}
-                  {list.length === 0 && <div className="drop-hint"><Plus /> {state === 'short' ? 'Nothing logged yet' : 'Drop a project here'}</div>}
-                </section>
-              )
-            })}
+            {days.map((d) => (
+              <DayColumn key={d} date={d} entries={entries.filter((e) => e.entry_date === d)} dayHours={dayHours} projById={projById} wtById={wtById}
+                isToday={d === t} isFirst={d === days[0]} over={over === d} editingId={editing?.id}
+                onDropProject={onDropProject}
+                onOpen={(e, el) => setEditing({ id: e.id, anchor: el })}
+                onResize={(e, h) => commit(e, { hours: h })}
+                onMove={(e, date) => commit(e, { entry_date: date })} />
+            ))}
           </div>
+          {editingEntry && (
+            <EntryPopover e={editingEntry} anchor={editing.anchor} project={projById[editingEntry.project_id]} workTypes={workTypes} chunks={chunks}
+              onChange={(f) => commit(editingEntry, f)} onRemove={remove} onClose={() => setEditing(null)} />
+          )}
         </main>
 
         {/* Right rail */}
@@ -312,93 +302,17 @@ export default function MyWeek() {
           <div className="panel panel-b col" style={{ gap: 8 }}>
             <h3>Shortcuts</h3>
             <ul className="small" style={{ margin: 0, padding: 0, listStyle: 'none', color: 'var(--text-2)' }}>
-              <li className="row between" style={{ borderBottom: '1px dotted var(--line)', paddingBottom: 6 }}><span>Click a project</span><span className="muted">adds to {dayName(quickAddDate)}</span></li>
-              <li className="row between" style={{ borderBottom: '1px dotted var(--line)', padding: '6px 0' }}><span>Drag a project</span><span className="muted">adds to that day</span></li>
-              <li className="row between" style={{ paddingTop: 6 }}><span>Repeat last week</span><span className="muted">copies, then edit</span></li>
+              <li className="row between" style={{ borderBottom: '1px dotted var(--line)', paddingBottom: 6 }}><span>Drag a project in</span><span className="muted">1h block on that day</span></li>
+              <li className="row between" style={{ borderBottom: '1px dotted var(--line)', padding: '6px 0' }}><span>Click a project</span><span className="muted">adds to {dayName(quickAddDate)}</span></li>
+              <li className="row between" style={{ borderBottom: '1px dotted var(--line)', padding: '6px 0' }}><span>Pull a block's edge</span><span className="muted">change the time</span></li>
+              <li className="row between" style={{ borderBottom: '1px dotted var(--line)', padding: '6px 0' }}><span>Drag a block</span><span className="muted">move to another day</span></li>
+              <li className="row between" style={{ borderBottom: '1px dotted var(--line)', padding: '6px 0' }}><span>Click a block</span><span className="muted">work type and note</span></li>
+              <li className="row between" style={{ paddingTop: 6 }}><span>← →</span><span className="muted">previous / next week</span></li>
             </ul>
           </div>
         </aside>
       </div>
       {toast && <div className="toast" role="status">{toast}</div>}
-      {hasDraft && <span className="sr">You have an unsaved entry</span>}
     </div>
-  )
-}
-
-function DurationInput({ hours, isChunk, onChange }) {
-  const [text, setText] = useState(isChunk || !hours ? '' : fmtHours(hours))
-  const [bad, setBad] = useState(false)
-  useEffect(() => { if (isChunk) { setText(''); setBad(false) } }, [isChunk, hours])
-  function commit(v) {
-    setText(v)
-    if (!v.trim()) { setBad(false); return }
-    const h = parseDuration(v)
-    if (h === null || h <= 0 || h > 24) { setBad(true); return }
-    setBad(false); onChange(h)
-  }
-  return (
-    <span className="row" style={{ gap: 6 }}>
-      <input type="text" inputMode="decimal" aria-label="Other duration, e.g. 3h 20m" placeholder="other, e.g. 3h 20m" className="input"
-        style={{ width: 132, height: 30, padding: '0 10px', borderRadius: 999, borderColor: bad ? 'var(--bad)' : !isChunk && hours ? 'var(--charcoal)' : undefined }}
-        value={text} onChange={(ev) => commit(ev.target.value)} />
-      {!isChunk && hours > 0 && !bad && <span className="tiny muted">= {fmtHours(hours)}</span>}
-      {bad && <span className="tiny" style={{ color: 'var(--bad)' }}>try 3h 20m or 3:20</span>}
-    </span>
-  )
-}
-
-function EntryCard({ e, project, workType, workTypes, chunks, onEdit, onChange, onSave, onRemove }) {
-  if (!project) return null
-  const isChunk = chunks.some((c) => Number(c.hours) === e.hours)
-  return (
-    <article className={`entry ${e.editing ? 'editing' : ''}`}>
-      <div className="strip" style={{ background: project.colour }} />
-      <div className="body">
-        <div className="row between" style={{ alignItems: 'flex-start', gap: 6 }}>
-          <div className="col" style={{ gap: 0, minWidth: 0 }}><span className="title">{project.name}</span><span className="tiny muted">{project.client?.name}</span></div>
-          <span className="hrs">{e.hours ? fmtHours(e.hours) : '—'}</span>
-        </div>
-
-        {!e.editing && (
-          <>
-            <div className="row between">
-              <div className="row wrap" style={{ gap: 6 }}>
-                <span className="tag">{workType?.name || 'Uncategorised'}</span>
-                {e.source === 'calendar' && <span className="tiny muted row" style={{ gap: 4 }} title="Added from Outlook"><Calendar width="12" height="12" /> Outlook</span>}
-                {e.source === 'copied' && <span className="tiny muted" title="Copied from last week">copied</span>}
-              </div>
-              <button className="icon-btn" aria-label="Edit entry" onClick={onEdit}><Pencil /></button>
-            </div>
-            {e.note && <p className="small" style={{ margin: 0, color: 'var(--text-2)', lineHeight: 1.35 }}>{e.note}</p>}
-          </>
-        )}
-
-        {e.editing && (
-          <div className="col" style={{ gap: 10, paddingTop: 4 }}>
-            <div className="col" style={{ gap: 6 }}>
-              <span className="label">How long<Hint size={12} title="How long" text="Tap a pill for the common chunks, or type anything in the box: 3h 20m, 3:20, 200m and 3.33 all work. A half day is 3.75h and a full day is 7.5h." /></span>
-              <div className="row wrap" style={{ gap: 6 }}>
-                {chunks.map((c) => <button key={c.label} type="button" className={`pill ${Number(c.hours) === e.hours ? 'on' : ''}`} onClick={() => onChange({ hours: Number(c.hours) })}>{c.label}</button>)}
-                <DurationInput hours={e.hours} isChunk={isChunk} onChange={(h) => onChange({ hours: h })} />
-              </div>
-            </div>
-            <div className="col" style={{ gap: 6 }}>
-              <span className="label">What kind of work<Hint size={12} title="Work type" text="Roughly what you were doing, so reports can show where the time goes. Pick the closest fit. Admins can add or rename these." /></span>
-              <div className="row wrap" style={{ gap: 6 }}>
-                {workTypes.map((w) => <button key={w.id} type="button" className={`pill ${w.id === e.work_type_id ? 'on violet' : ''}`} onClick={() => onChange({ work_type_id: w.id })}>{w.name}</button>)}
-              </div>
-            </div>
-            <label className="field">Note <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span>
-              <input className="input" style={{ height: 34 }} placeholder="e.g. Scored round-two sifts" value={e.note || ''} onChange={(ev) => onChange({ note: ev.target.value })}
-                onKeyDown={(ev) => { if (ev.key === 'Enter') onSave() }} />
-            </label>
-            <div className="row between" style={{ paddingTop: 2 }}>
-              <button className="btn sm ghost danger" onClick={onRemove}>Remove</button>
-              <button className="btn sm primary" onClick={onSave}>Save</button>
-            </div>
-          </div>
-        )}
-      </div>
-    </article>
   )
 }

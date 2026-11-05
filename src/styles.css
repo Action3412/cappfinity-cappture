@@ -224,3 +224,41 @@ h1 { font-size: 24px; } h2 { font-size: 15px; } h3 { font-size: 13px; }
 .seg button.on { background: #fff; color: var(--charcoal); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
 .client-head { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 6px 4px 2px; border: 0; background: transparent; text-align: left; cursor: pointer; }
 .client-head:hover .label { color: var(--charcoal); }
+
+/* ---------- Day track & blocks ---------- */
+.day { min-height: 0; }
+.day.drop-target { background: #EEF3FF !important; border-color: var(--blue) !important; box-shadow: 0 0 0 3px rgba(72,123,250,.15); }
+.track { position: relative; border-radius: 10px; background:
+  repeating-linear-gradient(to bottom, transparent 0, transparent 63px, rgba(38,38,38,.07) 63px, rgba(38,38,38,.07) 64px); }
+.hour-mark { position: absolute; left: 0; right: 0; height: 0; pointer-events: none; }
+.hour-mark i { position: absolute; right: 4px; top: -13px; font-style: normal; font-size: 9px; font-weight: 600; letter-spacing: .04em; color: rgba(38,38,38,.28); }
+.target-line { position: absolute; left: -2px; right: -2px; height: 0; border-top: 1.5px dashed rgba(38,38,38,.3); pointer-events: none; }
+.target-line i { position: absolute; right: 2px; top: 2px; font-style: normal; font-size: 9px; font-weight: 700; color: rgba(38,38,38,.45); background: inherit; }
+.track-free { position: absolute; left: 2px; right: 2px; border-radius: 10px; border: 1.5px dashed rgba(38,38,38,.14); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 600; color: rgba(38,38,38,.35); pointer-events: none; overflow: hidden; }
+.day.st-short .track-free { color: #B0348F; border-color: rgba(251,108,245,.45); }
+.day.st-part .track-free { color: #8A6400; border-color: rgba(253,182,1,.5); }
+
+.block { position: absolute; left: 2px; right: 2px; display: flex; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 1px 2px rgba(38,38,38,.06); overflow: hidden; cursor: grab; user-select: none; -webkit-user-select: none; transition: box-shadow .15s, transform .15s, height .08s; touch-action: pan-y; }
+.block:hover { box-shadow: 0 4px 14px rgba(38,38,38,.12); border-color: #D2D2DA; }
+.block:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.block.editing { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(72,123,250,.18); }
+.block.lifted { cursor: grabbing; box-shadow: 0 16px 40px rgba(38,38,38,.22); transition: box-shadow .15s; opacity: .96; }
+.block.resizing { transition: none; box-shadow: 0 6px 20px rgba(38,38,38,.14); }
+.block-bar { width: 4px; flex: 0 0 auto; }
+.block-body { flex: 1 1 auto; min-width: 0; padding: 7px 8px 8px 9px; display: flex; flex-direction: column; gap: 3px; }
+.block-title { font-size: 12.5px; font-weight: 600; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.block-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.block-hrs { font-size: 12px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; padding: 1px 6px; border-radius: 6px; background: var(--bg); }
+.block-hrs.live { background: var(--charcoal); color: #fff; }
+.block-note { margin: 0; font-size: 11px; color: var(--text-2); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.block.compact .block-body { padding: 4px 8px 4px 9px; justify-content: center; }
+.block.tiny .block-title { font-size: 11px; } .block.tiny .block-hrs { font-size: 10px; padding: 0 5px; }
+.block-handle { position: absolute; left: 0; right: 0; bottom: 0; height: 12px; cursor: ns-resize; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px; touch-action: none; }
+.block-handle i { width: 26px; height: 3px; border-radius: 2px; background: rgba(38,38,38,.18); opacity: 0; transition: opacity .15s; }
+.block:hover .block-handle i, .block.resizing .block-handle i { opacity: 1; }
+.block.resizing .block-handle i { background: var(--blue); }
+
+/* ---------- Floating editor ---------- */
+.pop { position: fixed; z-index: 60; width: 320px; padding: 16px; background: #fff; border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 18px 50px rgba(0,0,0,.18); animation: pop-in .14s ease-out; }
+@keyframes pop-in { from { opacity: 0; transform: translateY(4px) scale(.98); } to { opacity: 1; transform: none; } }
+@media (max-width: 720px) { .pop { left: 8px !important; right: 8px; width: auto; top: auto !important; bottom: 8px; } }
