@@ -596,17 +596,17 @@ h1 + .hint { margin-left: 2px; }
 @media (max-width: 720px) { .desk-only { display: none !important; } }
 
 /* ---------- Login: a brand moment ---------- */
-.login { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: center; gap: 40px; padding: 40px; background: linear-gradient(135deg, #262626 0%, #3A2F6B 55%, #4A3A8F 100%); color: #fff; position: relative; overflow: hidden; }
+.login { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 560px) minmax(0, 440px); justify-content: center; align-items: center; gap: 72px; padding: 40px; background: linear-gradient(135deg, #262626 0%, #3A2F6B 55%, #4A3A8F 100%); color: #fff; position: relative; overflow: hidden; }
 .login-brand { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 14px; padding: 20px 20px 20px 40px; z-index: 1; }
-.login-mark { width: 84px; height: 84px; margin-bottom: 8px; position: relative; }
-.login-title { font-size: 56px; line-height: 1; letter-spacing: -1px; color: #fff; margin: 0; }
+.login-mark { width: 96px; height: 96px; margin-bottom: 10px; position: relative; }
+.login-title { font-size: 64px; line-height: 1; letter-spacing: -1px; color: #fff; margin: 0; }
 .login-title .dot { color: var(--pink); }
-.login-tag { font-size: 20px; line-height: 1.35; color: rgba(255,255,255,.72); margin: 0 0 18px; }
-.login-lockup { width: 280px; height: auto; opacity: .9; margin-top: 18px; }
+.login-tag { font-size: 22px; line-height: 1.35; color: rgba(255,255,255,.72); margin: 0 0 18px; }
+.login-lockup { width: 320px; height: auto; opacity: .9; margin-top: 18px; }
 .login-card { position: relative; z-index: 1; width: 100%; max-width: 420px; justify-self: center; background: #fff; color: var(--charcoal); border-radius: 22px; padding: 32px; display: flex; flex-direction: column; gap: 18px; box-shadow: 0 30px 80px rgba(0,0,0,.35); }
 /* Slow-breathing spectrum rings behind the mark */
 .login-orb { position: absolute; left: -120px; top: -140px; width: 560px; height: 560px; pointer-events: none; }
-.login-orb span { position: absolute; inset: 0; border-radius: 50%; border: 2px solid transparent; background: linear-gradient(#2F2560, #2F2560) padding-box, conic-gradient(from 0deg, #487BFA, #9275FA, #FB6CF5, #FDB601, #487BFA) border-box; opacity: .22; animation: orb 14s ease-in-out infinite; }
+.login-orb span { position: absolute; inset: 0; border-radius: 50%; border: 2px solid transparent; background: linear-gradient(#2F2560, #2F2560) padding-box, conic-gradient(from 0deg, #487BFA, #9275FA, #FB6CF5, #FDB601, #487BFA) border-box; opacity: .34; animation: orb 14s ease-in-out infinite; }
 .login-orb span:nth-child(2) { inset: 70px; opacity: .16; animation-duration: 18s; animation-direction: reverse; }
 .login-orb span:nth-child(3) { inset: 140px; opacity: .12; animation-duration: 22s; }
 @keyframes orb { 0%, 100% { transform: scale(.96) rotate(0deg); } 50% { transform: scale(1.04) rotate(180deg); } }
