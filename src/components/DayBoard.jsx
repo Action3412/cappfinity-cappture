@@ -296,7 +296,7 @@ export function EntryPopover({ e, anchor, project, workTypes, chunks, days, lock
         <label className="field" style={{ width: 110 }}>Ends
           <input className="input" type="time" step="900" style={{ height: 34 }} value={hoursToTime(start + e.hours)} onChange={(ev) => { const t = timeToHours(ev.target.value); if (t !== null && t > start) onChange({ hours: Math.round((t - start) * 4) / 4 }) }} />
         </label>
-        <span className="tiny muted" style={{ paddingBottom: 8 }}>or drag the block</span>
+        <span className="tiny muted desk-only" style={{ paddingBottom: 8 }}>or drag the block</span>
       </div>
 
       <div className="col" style={{ gap: 6, marginTop: 12 }}>
@@ -326,7 +326,7 @@ export function EntryPopover({ e, anchor, project, workTypes, chunks, days, lock
           {days.map((d) => <button key={d} type="button" className="pill" disabled={d === e.entry_date} onClick={() => onCopy(e, d)} title={`Copy to ${dayName(d)} at the same time`}>{dayName(d)}</button>)}
           <button type="button" className="pill" onClick={() => onCopy(e, e.entry_date)} title="Copy straight after this one">Duplicate</button>
         </div>
-        <span className="tiny muted">Tip: hold Alt (Option on a Mac) while dragging a block to copy it.</span>
+        <span className="tiny muted desk-only">Tip: hold Alt (Option on a Mac) while dragging a block to copy it.</span>
       </div>
 
       <div className="row between" style={{ marginTop: 14 }}>

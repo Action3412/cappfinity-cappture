@@ -597,3 +597,4 @@ h1 + .hint { margin-left: 2px; }
   .admin-nav a > span { white-space: nowrap; }
   .banner { font-size: 12px; padding: 6px 10px; }
 }
+@media (max-width: 720px) { .desk-only { display: none !important; } }
