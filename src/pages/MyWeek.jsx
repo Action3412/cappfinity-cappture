@@ -110,7 +110,7 @@ export default function MyWeek() {
     if (!projById[projectId]) return
     setDragging(null); setOver(null)
     try {
-      const row = await insertEntry({ profile_id: user.id, project_id: projectId, work_type_id: null, entry_date: date, hours: 1, note: null, source: 'manual' })
+      const row = await insertEntry({ profile_id: user.id, project_id: projectId, work_type_id: null, entry_date: date, hours: 1, note: null, source: 'manual', sort_order: entries.filter((x) => x.entry_date === date).length })
       const e = { ...row, hours: Number(row.hours) }
       setEntries((es) => [...es, e])
       refreshTotals()
@@ -128,6 +128,29 @@ export default function MyWeek() {
     patch(e.id, fields)
     try { await updateEntry(e.id, fields); refreshTotals() }
     catch (ex) { patch(e.id, before); flash(ex.message) }
+  }
+  // Move (or copy) a block to a day at a position. Renumbers that day's blocks so the order sticks.
+  async function moveEntry(e, date, index, copy = false) {
+    let moving = e
+    if (copy) {
+      try {
+        const row = await insertEntry({ profile_id: user.id, project_id: e.project_id, work_type_id: e.work_type_id, entry_date: date, hours: e.hours, note: e.note, source: 'copied', sort_order: 999 })
+        moving = { ...row, hours: Number(row.hours) }
+      } catch (ex) { flash(ex.message); return }
+    }
+    const snapshot = entries
+    const others = entries.filter((x) => x.id !== moving.id)
+    const dayList = others.filter((x) => x.entry_date === date)
+    dayList.splice(Math.min(index ?? dayList.length, dayList.length), 0, { ...moving, entry_date: date })
+    const renumbered = dayList.map((x, i) => ({ ...x, sort_order: i }))
+    const next = [...others.filter((x) => x.entry_date !== date), ...renumbered]
+    setEntries(next)
+    const changed = renumbered.filter((x) => { const b = snapshot.find((y) => y.id === x.id); return !b || b.sort_order !== x.sort_order || b.entry_date !== x.entry_date })
+    try {
+      await Promise.all(changed.map((x) => updateEntry(x.id, { entry_date: x.entry_date, sort_order: x.sort_order })))
+      refreshTotals()
+      if (copy) flash(`Copied to ${dayName(date)}`)
+    } catch (ex) { setEntries(snapshot); flash(ex.message) }
   }
   async function remove(e) {
     setEditing(null)
@@ -253,12 +276,12 @@ export default function MyWeek() {
                 onDropProject={onDropProject}
                 onOpen={(e, el) => setEditing({ id: e.id, anchor: el })}
                 onResize={(e, h) => commit(e, { hours: h })}
-                onMove={(e, date) => commit(e, { entry_date: date })} />
+                onMove={(e, date, index, copy) => moveEntry(e, date, index, copy)} />
             ))}
           </div>
           {editingEntry && (
-            <EntryPopover e={editingEntry} anchor={editing.anchor} project={projById[editingEntry.project_id]} workTypes={workTypes} chunks={chunks}
-              onChange={(f) => commit(editingEntry, f)} onRemove={remove} onClose={() => setEditing(null)} />
+            <EntryPopover e={editingEntry} anchor={editing.anchor} project={projById[editingEntry.project_id]} workTypes={workTypes} chunks={chunks} days={days}
+              onChange={(f) => commit(editingEntry, f)} onRemove={remove} onCopy={(e, date) => moveEntry(e, date, undefined, true)} onClose={() => setEditing(null)} />
           )}
         </main>
 
@@ -305,7 +328,8 @@ export default function MyWeek() {
               <li className="row between" style={{ borderBottom: '1px dotted var(--line)', paddingBottom: 6 }}><span>Drag a project in</span><span className="muted">1h block on that day</span></li>
               <li className="row between" style={{ borderBottom: '1px dotted var(--line)', padding: '6px 0' }}><span>Click a project</span><span className="muted">adds to {dayName(quickAddDate)}</span></li>
               <li className="row between" style={{ borderBottom: '1px dotted var(--line)', padding: '6px 0' }}><span>Pull a block's edge</span><span className="muted">change the time</span></li>
-              <li className="row between" style={{ borderBottom: '1px dotted var(--line)', padding: '6px 0' }}><span>Drag a block</span><span className="muted">move to another day</span></li>
+              <li className="row between" style={{ borderBottom: '1px dotted var(--line)', padding: '6px 0' }}><span>Drag a block</span><span className="muted">move or reorder</span></li>
+              <li className="row between" style={{ borderBottom: '1px dotted var(--line)', padding: '6px 0' }}><span>Alt + drag a block</span><span className="muted">copy it</span></li>
               <li className="row between" style={{ borderBottom: '1px dotted var(--line)', padding: '6px 0' }}><span>Click a block</span><span className="muted">work type and note</span></li>
               <li className="row between" style={{ paddingTop: 6 }}><span>← →</span><span className="muted">previous / next week</span></li>
             </ul>

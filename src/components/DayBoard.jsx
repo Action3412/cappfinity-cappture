@@ -66,8 +66,11 @@ export function DayColumn({ date, entries, dayHours, projById, wtById, isToday, 
 function EntryBlock({ e, top, project, workType, editing, onOpen, onResize, onMove }) {
   const ref = useRef(null)
   const [preview, setPreview] = useState(null)       // hours while resizing
-  const [drag, setDrag] = useState(null)             // {dx, dy, overDay} while moving
+  const [drag, setDrag] = useState(null)             // {dx, dy, copy} while moving
   const gesture = useRef(null)
+
+  // Window-level listeners so a release anywhere always ends the gesture.
+  useEffect(() => () => endGesture(), []) // eslint-disable-line
 
   if (!project) return null
   const hours = preview ?? e.hours
@@ -75,11 +78,47 @@ function EntryBlock({ e, top, project, workType, editing, onOpen, onResize, onMo
   const compact = h < 46
   const tiny = h < 30
 
+  function targetAt(x, y) {
+    // Everything under the pointer except the block itself; first day column wins.
+    const stack = document.elementsFromPoint(x, y)
+    for (const el of stack) {
+      if (ref.current && ref.current.contains(el)) continue
+      const day = el.closest?.('[data-day]')
+      if (day) {
+        const date = day.getAttribute('data-day')
+        const track = day.querySelector('.track')
+        const blocks = [...day.querySelectorAll('.block')].filter((b) => b !== ref.current)
+        let index = blocks.length
+        for (let i = 0; i < blocks.length; i++) {
+          const r = blocks[i].getBoundingClientRect()
+          if (y < r.top + r.height / 2) { index = i; break }
+        }
+        const lineY = index < blocks.length ? blocks[index].getBoundingClientRect().top - 3 : (blocks.length ? blocks[blocks.length - 1].getBoundingClientRect().bottom + 1 : track.getBoundingClientRect().top)
+        return { date, index, lineY: lineY - track.getBoundingClientRect().top, dayEl: day, track }
+      }
+    }
+    return null
+  }
+  function showInsert(target) {
+    document.querySelectorAll('.insert-line').forEach((n) => n.remove())
+    document.querySelectorAll('.day.drop-target').forEach((n) => n.classList.remove('drop-target'))
+    if (!target) return
+    target.dayEl.classList.add('drop-target')
+    const line = document.createElement('div'); line.className = 'insert-line'; line.style.top = `${target.lineY}px`
+    target.track.appendChild(line)
+  }
+  function endGesture() {
+    gesture.current = null
+    window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up)
+    document.body.classList.remove('dragging')
+    showInsert(null)
+  }
+
   function down(ev, mode) {
     if (ev.button !== undefined && ev.button !== 0) return
-    ev.stopPropagation()
-    gesture.current = { mode, startX: ev.clientX, startY: ev.clientY, startH: e.hours, moved: false, overDay: null }
-    ev.currentTarget.setPointerCapture?.(ev.pointerId)
+    ev.stopPropagation(); ev.preventDefault()
+    gesture.current = { mode, startX: ev.clientX, startY: ev.clientY, startH: e.hours, moved: false, target: null, copy: ev.altKey }
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up)
   }
   function move(ev) {
     const g = gesture.current; if (!g) return
@@ -90,17 +129,16 @@ function EntryBlock({ e, top, project, workType, editing, onOpen, onResize, onMo
       return
     }
     if (!g.moved && Math.hypot(dx, dy) < 6) return
+    if (!g.moved) document.body.classList.add('dragging')
     g.moved = true
-    const el = document.elementFromPoint(ev.clientX, ev.clientY)
-    const day = el?.closest?.('[data-day]')?.getAttribute('data-day') || null
-    g.overDay = day
-    setDrag({ dx, dy, overDay: day })
-    document.querySelectorAll('.day.drop-target').forEach((n) => n.classList.remove('drop-target'))
-    if (day && day !== e.entry_date) document.querySelector(`[data-day="${day}"]`)?.classList.add('drop-target')
+    g.copy = ev.altKey
+    g.target = targetAt(ev.clientX, ev.clientY)
+    showInsert(g.target)
+    setDrag({ dx, dy, copy: g.copy })
   }
   function up(ev) {
-    const g = gesture.current; gesture.current = null
-    document.querySelectorAll('.day.drop-target').forEach((n) => n.classList.remove('drop-target'))
+    const g = gesture.current
+    endGesture()
     if (!g) return
     if (g.mode === 'resize') {
       const nh = snap(g.startH + (ev.clientY - g.startY) / PX_PER_HOUR)
@@ -110,19 +148,18 @@ function EntryBlock({ e, top, project, workType, editing, onOpen, onResize, onMo
     }
     setDrag(null)
     if (!g.moved) { onOpen(e, ref.current); return }
-    if (g.overDay && g.overDay !== e.entry_date) onMove(e, g.overDay)
+    if (g.target) onMove(e, g.target.date, g.target.index, g.copy)
   }
 
   const style = {
     top, height: h,
     transform: drag ? `translate(${drag.dx}px, ${drag.dy}px) scale(1.02)` : undefined,
     zIndex: drag ? 20 : editing ? 5 : undefined,
-    pointerEvents: drag ? 'none' : undefined,
   }
 
   return (
     <article ref={ref} className={`block ${drag ? 'lifted' : ''} ${preview !== null ? 'resizing' : ''} ${editing ? 'editing' : ''} ${compact ? 'compact' : ''} ${tiny ? 'tiny' : ''}`} style={style}
-      onPointerDown={(ev) => down(ev, 'move')} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
+      onPointerDown={(ev) => down(ev, 'move')}
       role="button" tabIndex={0} aria-label={`${project.name}, ${fmtHours(e.hours)}. Click to edit.`}
       onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onOpen(e, ref.current) } }}>
       <span className="block-bar" style={{ background: project.colour }} />
@@ -137,7 +174,8 @@ function EntryBlock({ e, top, project, workType, editing, onOpen, onResize, onMo
         {!compact && e.note && <p className="block-note">{e.note}</p>}
         {!compact && e.source === 'calendar' && <span className="tiny muted row" style={{ gap: 4 }}><Calendar width="11" height="11" /> Outlook</span>}
       </div>
-      <div className="block-handle" onPointerDown={(ev) => down(ev, 'resize')} onPointerMove={move} onPointerUp={up} onPointerCancel={up} aria-hidden="true"><i /></div>
+      {drag?.copy && <span className="block-copy" aria-hidden="true">+</span>}
+      <div className="block-handle" onPointerDown={(ev) => down(ev, 'resize')} aria-hidden="true"><i /></div>
     </article>
   )
 }
@@ -145,7 +183,7 @@ function EntryBlock({ e, top, project, workType, editing, onOpen, onResize, onMo
 /* ------------------------------------------------------------------ */
 /* Floating editor next to a block.                                    */
 /* ------------------------------------------------------------------ */
-export function EntryPopover({ e, anchor, project, workTypes, chunks, onChange, onRemove, onClose }) {
+export function EntryPopover({ e, anchor, project, workTypes, chunks, days, onChange, onRemove, onCopy, onClose }) {
   const ref = useRef(null)
   const [pos, setPos] = useState({ top: 0, left: 0, side: 'right' })
   const [note, setNote] = useState(e.note || '')
@@ -208,6 +246,15 @@ export function EntryPopover({ e, anchor, project, workTypes, chunks, onChange, 
       <label className="field" style={{ marginTop: 12 }}>Note <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span>
         <input className="input" style={{ height: 34 }} placeholder="e.g. Scored round-two sifts" value={note} onChange={(ev) => setNote(ev.target.value)} onBlur={saveNote} onKeyDown={(ev) => { if (ev.key === 'Enter') { saveNote(); onClose() } }} />
       </label>
+
+      <div className="col" style={{ gap: 6, marginTop: 12 }}>
+        <span className="label">Copy to</span>
+        <div className="row wrap" style={{ gap: 6 }}>
+          {days.map((d) => <button key={d} type="button" className="pill" disabled={d === e.entry_date} onClick={() => onCopy(e, d)} title={`Copy to ${dayName(d)}`}>{dayName(d)}</button>)}
+          <button type="button" className="pill" onClick={() => onCopy(e, e.entry_date)}>Duplicate</button>
+        </div>
+        <span className="tiny muted">Tip: hold Alt (Option on a Mac) while dragging a block to copy it instead of moving it.</span>
+      </div>
 
       <div className="row between" style={{ marginTop: 14 }}>
         <button className="btn sm ghost danger" onClick={() => onRemove(e)}>Remove</button>

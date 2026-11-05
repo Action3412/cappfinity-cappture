@@ -262,3 +262,9 @@ h1 { font-size: 24px; } h2 { font-size: 15px; } h3 { font-size: 13px; }
 .pop { position: fixed; z-index: 60; width: 320px; padding: 16px; background: #fff; border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 18px 50px rgba(0,0,0,.18); animation: pop-in .14s ease-out; }
 @keyframes pop-in { from { opacity: 0; transform: translateY(4px) scale(.98); } to { opacity: 1; transform: none; } }
 @media (max-width: 720px) { .pop { left: 8px !important; right: 8px; width: auto; top: auto !important; bottom: 8px; } }
+body.dragging, body.dragging * { cursor: grabbing !important; user-select: none !important; }
+.insert-line { position: absolute; left: 2px; right: 2px; height: 3px; border-radius: 2px; background: var(--blue); box-shadow: 0 0 0 2px rgba(72,123,250,.25); pointer-events: none; z-index: 15; }
+.block-copy { position: absolute; top: -8px; right: -8px; width: 20px; height: 20px; border-radius: 50%; background: var(--blue); color: #fff; font-weight: 700; font-size: 14px; line-height: 20px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,.2); }
+.block { overflow: visible; }
+.block .block-body, .block .block-bar { border-radius: inherit; }
+.block-bar { border-radius: 10px 0 0 10px !important; }
