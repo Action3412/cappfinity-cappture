@@ -1,4 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+
+function useWidth(fallback = 640) {
+  const ref = useRef(null); const [w, setW] = useState(fallback)
+  useEffect(() => { if (!ref.current) return; const ro = new ResizeObserver((es) => setW(Math.max(280, Math.floor(es[0].contentRect.width)))); ro.observe(ref.current); return () => ro.disconnect() }, [])
+  return [ref, w]
+}
 import { fmtHours } from '../lib/time.js'
 
 // Brand-adjacent categorical palette, validated for colour-vision deficiency and contrast. Fixed order.
@@ -24,7 +30,8 @@ function niceMax(v) { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Ma
 /* ---------------- Weekly columns on the charcoal card ---------------- */
 export function WeeklyColumns({ data, target }) {
   const { show, hide, Tip } = useTip()
-  const W = 640, H = 230, padL = 34, padR = 10, padT = 18, padB = 26
+  const [wrapRef, W] = useWidth(640)
+  const H = 220, padL = 34, padR = 10, padT = 18, padB = 26
   const max = niceMax(Math.max(target || 0, ...data.map((d) => d.billable + d.internal)) * 1.05)
   const iw = W - padL - padR, ih = H - padT - padB
   const n = Math.max(1, data.length)
@@ -32,8 +39,8 @@ export function WeeklyColumns({ data, target }) {
   const y = (v) => padT + ih - (v / max) * ih
   const ticks = [0, 0.5, 1].map((f) => max * f)
   return (
-    <div className="chart">
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Hours logged per week, billable and internal">
+    <div className="chart" ref={wrapRef}>
+      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label="Hours logged per week, billable and internal" style={{ display: 'block' }}>
         <defs>
           <linearGradient id="col-spectrum" x1="0" y1="1" x2="0" y2="0">
             <stop offset="0" stopColor="#487BFA" /><stop offset="0.55" stopColor="#9275FA" /><stop offset="1" stopColor="#FB6CF5" />
