@@ -123,7 +123,7 @@ function Projects() {
         <div className="panel-h"><h2>Client projects</h2><label className="checkbox small"><input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Show archived</label></div>
         <div className="scroll-x">
           <table className="tbl" style={{ minWidth: 760 }}>
-            <thead><tr><th>Client</th><th>Project</th><th>Code</th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Budget<Hint align="right" title="Budget" text="Total hours for the project. Edit it here and it saves when you click away." /></span></th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Allocated<Hint align="right" title="Allocated" text="How the budget has been shared out to named people using the Allocate button. Pool means nobody has a specific slice yet: anyone can still log time, it's just one shared pot. Giving someone an allocation shows them a little budget bar on their own project card." /></span></th><th><span className="row" style={{ gap: 4 }}>Status<Hint title="Status" text="Archiving takes a project off everyone's list so no more time can be logged to it, but keeps every hour already logged in reports and exports. Restore brings it back." /></span></th><th /></tr></thead>
+            <thead><tr><th>Client</th><th>Project</th><th>Code</th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Budget<Hint align="right" title="Budget" text="Total hours for the project. Edit it here and it saves when you click away." /></span></th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Allocated<Hint align="right" title="Allocated" text="Who's on the project, set with the Team button, and the hours you expect from them if you've given any. Anyone can still log time whether or not they're on it; being on it just puts the project at the top of their list, and an hours estimate gives them a little budget bar to track against." /></span></th><th><span className="row" style={{ gap: 4 }}>Status<Hint title="Status" text="Archiving takes a project off everyone's list so no more time can be logged to it, but keeps every hour already logged in reports and exports. Restore brings it back." /></span></th><th /></tr></thead>
             <tbody>
               {list.map((p) => {
                 const al = allocByProject[p.id] || []
@@ -133,10 +133,10 @@ function Projects() {
                     <td>{p.name}{!p.billable && <span className="tag grey" style={{ marginLeft: 8 }}>non-billable</span>}</td>
                     <td className="small muted">{p.code}</td>
                     <td className="num"><input className="input" type="number" min="0" step="0.5" defaultValue={p.budget_hours} onBlur={(e) => Number(e.target.value) !== Number(p.budget_hours) && updateBudget(p, e.target.value)} style={{ width: 84, height: 32, textAlign: 'right' }} aria-label="Budget hours" /></td>
-                    <td className="num">{al.length ? `${al.length} ${al.length === 1 ? 'person' : 'people'} · ${al.reduce((a, x) => a + Number(x.hours), 0)}h` : <span className="muted">pool</span>}</td>
+                    <td className="num">{al.length ? `${al.length} ${al.length === 1 ? 'person' : 'people'}${al.some((x) => x.hours) ? ` · ${al.reduce((a, x) => a + (Number(x.hours) || 0), 0)}h` : ''}` : <span className="muted">nobody yet</span>}</td>
                     <td><span className={`tag ${p.status === 'active' ? 'ok' : 'grey'}`}>{p.status === 'active' ? 'Active' : 'Archived'}</span></td>
                     <td className="num"><div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
-                      <button className="btn sm" onClick={() => setAllocFor(p)}>Allocate</button>
+                      <button className="btn sm" onClick={() => setAllocFor(p)}>Team</button>
                       <button className="btn sm" onClick={() => toggleArchive(p)}>{p.status === 'active' ? 'Archive' : 'Restore'}</button>
                     </div></td>
                   </tr>
@@ -161,36 +161,51 @@ function suggestCode(client, name) {
 }
 
 function AllocateModal({ project, people, allocs, onClose, flash }) {
-  const [rows, setRows] = useState(() => people.map((u) => ({ ...u, hours: allocs.find((a) => a.profile_id === u.id)?.hours ?? '' })))
+  const [rows, setRows] = useState(() => people.map((u) => {
+    const a = allocs.find((x) => x.profile_id === u.id)
+    return { ...u, on: !!a, hours: a?.hours ?? '' }
+  }))
   const [q, setQ] = useState('')
   const visible = rows.filter((r) => !q || `${r.full_name} ${r.email} ${r.teams?.name}`.toLowerCase().includes(q.toLowerCase()))
-  const total = rows.reduce((a, r) => a + (Number(r.hours) || 0), 0)
+  const onRows = rows.filter((r) => r.on)
+  const total = onRows.reduce((a, r) => a + (Number(r.hours) || 0), 0)
+  const noEstimate = onRows.filter((r) => !(Number(r.hours) > 0)).length
+  const set = (id, f) => setRows((rs) => rs.map((x) => (x.id === id ? { ...x, ...f } : x)))
 
   async function save() {
-    const keep = rows.filter((r) => Number(r.hours) > 0).map((r) => ({ project_id: project.id, profile_id: r.id, hours: Number(r.hours) }))
-    const drop = rows.filter((r) => !(Number(r.hours) > 0) && allocs.some((a) => a.profile_id === r.id)).map((r) => r.id)
+    const keep = onRows.map((r) => ({ project_id: project.id, profile_id: r.id, hours: Number(r.hours) > 0 ? Number(r.hours) : null }))
+    const drop = rows.filter((r) => !r.on && allocs.some((a) => a.profile_id === r.id)).map((r) => r.id)
     if (drop.length) await supabase.from('allocations').delete().eq('project_id', project.id).in('profile_id', drop)
     if (keep.length) { const { error } = await supabase.from('allocations').upsert(keep, { onConflict: 'project_id,profile_id' }); if (error) { flash(error.message); return } }
-    flash('Allocations saved'); onClose()
+    flash('Team saved'); onClose()
   }
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(38,38,38,.45)', display: 'grid', placeItems: 'center', zIndex: 40, padding: 20 }} onClick={onClose}>
-      <div className="panel col" style={{ width: '100%', maxWidth: 560, maxHeight: '85vh', gap: 0 }} onClick={(e) => e.stopPropagation()}>
-        <div className="panel-h"><div className="col" style={{ gap: 2 }}><h2>Allocate hours: {project.name}<Hint title="Allocating" text="Give each person the hours they're expected to spend on this project. It's a guide, not a lock: people can still log more, it'll just show as over. You can allocate more than the budget if you need to, it'll warn you but won't stop you." /></h2><span className="small muted">Budget {project.budget_hours}h · allocated {total}h {project.budget_hours && total > project.budget_hours ? '(over budget)' : ''}</span></div><button className="icon-btn" aria-label="Close" onClick={onClose}><X /></button></div>
-        <div className="panel-b col" style={{ gap: 10, overflow: 'auto' }}>
+      <div className="panel col" style={{ width: '100%', maxWidth: 600, maxHeight: '85vh', gap: 0 }} onClick={(e) => e.stopPropagation()}>
+        <div className="panel-h">
+          <div className="col" style={{ gap: 2 }}>
+            <h2>Who's on {project.name}<Hint title="Allocating" text="Tick someone to put them on the project: it goes to the top of their list and shows up under Mine. If you also have a view on how long they should spend, add the hours and they get a little budget bar to track against. Leave the hours blank if you just want them on it." /></h2>
+            <span className="small muted">{onRows.length} {onRows.length === 1 ? 'person' : 'people'} · {total ? `${total}h estimated` : 'no hours estimated'}{noEstimate && total ? ` · ${noEstimate} without an estimate` : ''}{project.budget_hours && total > project.budget_hours ? ' · over the project budget' : ''}</span>
+          </div>
+          <button className="icon-btn" aria-label="Close" onClick={onClose}><X /></button>
+        </div>
+        <div className="panel-b col" style={{ gap: 6, overflow: 'auto' }}>
           <input className="input" placeholder="Find a person…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <div className="row between tiny label" style={{ padding: '8px 4px 2px' }}><span>Person</span><span style={{ width: 170, textAlign: 'right' }}>Hours expected (optional)</span></div>
           {visible.map((r) => (
-            <div className="row" key={r.id} style={{ gap: 10, padding: '6px 0', borderBottom: '1px dotted var(--line)' }}>
+            <label className="row" key={r.id} style={{ gap: 10, padding: '7px 4px', borderBottom: '1px dotted var(--line)', cursor: 'pointer', background: r.on ? '#F7F6FD' : 'transparent', borderRadius: 8 }}>
+              <input type="checkbox" checked={r.on} onChange={(e) => set(r.id, { on: e.target.checked })} aria-label={`${r.full_name || r.email} on this project`} />
               <span className="avatar sm" style={{ background: av(r.full_name || r.email) }}>{initials(r.full_name || r.email)}</span>
               <div className="col grow" style={{ gap: 0, minWidth: 0 }}><b className="small">{r.full_name || r.email}</b><span className="tiny muted">{r.teams?.name || 'No team'}</span></div>
-              <input className="input" type="number" min="0" step="0.5" placeholder="0" value={r.hours} onChange={(e) => setRows((rs) => rs.map((x) => (x.id === r.id ? { ...x, hours: e.target.value } : x)))} style={{ width: 84, height: 32, textAlign: 'right' }} aria-label={`Hours for ${r.full_name}`} />
-              <span className="small muted" style={{ width: 14 }}>h</span>
-            </div>
+              {r.on
+                ? <span className="row" style={{ gap: 6 }}><input className="input" type="number" min="0.5" step="0.5" placeholder="no estimate" value={r.hours} onChange={(e) => set(r.id, { hours: e.target.value })} onClick={(e) => e.preventDefault()} style={{ width: 120, height: 32, textAlign: 'right' }} aria-label={`Hours for ${r.full_name}`} /><span className="small muted" style={{ width: 14 }}>h</span></span>
+                : <span className="tiny muted" style={{ width: 140, textAlign: 'right' }}>not on project</span>}
+            </label>
           ))}
           {!people.length && <span className="small muted">No active people yet.</span>}
         </div>
-        <div className="row between" style={{ padding: '12px 18px', borderTop: '1px solid var(--line-soft)' }}><span className="small muted">Set someone to 0 to take them off. People without an allocation can still log time to the project.</span><button className="btn primary" onClick={save}>Save</button></div>
+        <div className="row between" style={{ padding: '12px 18px', borderTop: '1px solid var(--line-soft)' }}><span className="small muted">Anyone can still log time to the project whether or not they're on it. Being on it just puts it at the top of their list.</span><button className="btn primary" onClick={save}>Save</button></div>
       </div>
     </div>
   )

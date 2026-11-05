@@ -54,7 +54,7 @@ export default function MyWeek() {
         fetchWeekEntries(user.id, days[0], days[4]), fetchPendingSuggestions(user.id),
       ])
       setProjects(p); setWorkTypes(w); setTotals(t); setSuggestions(s)
-      const am = {}; a.forEach((r) => { am[r.project_id] = Number(r.hours) }); setAllocs(am)
+      const am = {}; a.forEach((r) => { am[r.project_id] = r.hours === null ? true : Number(r.hours) }); setAllocs(am)
       setEntries(e.map((x) => ({ ...x, hours: Number(x.hours) })))
     } catch (ex) { setErr(ex.message || String(ex)) }
     finally { setLoading(false) }
@@ -215,7 +215,7 @@ export default function MyWeek() {
       <div className="week-layout">
         {/* Projects */}
         <aside className="week-side col" style={{ gap: 12 }}>
-          <div className="row between"><span className="row" style={{ gap: 6 }}><h2>My projects</h2><Hint title="My projects" text="Every live project you can log time to, grouped by client. Mine shows only projects you've been allocated hours on, Recent shows ones you've logged against before, and the dropdown narrows to one client. Click a client name to fold its projects away. Can't see a project? Ask an admin to add it." /></span><span className="tiny muted">Drag onto a day</span></div>
+          <div className="row between"><span className="row" style={{ gap: 6 }}><h2>My projects</h2><Hint title="My projects" text="Every live project you can log time to, grouped by client. Mine shows only projects you've been put on, Recent shows ones you've logged against before, and the dropdown narrows to one client. Click a client name to fold its projects away. Can't see a project? Ask an admin to add it." /></span><span className="tiny muted">Drag onto a day</span></div>
           <label className="search"><Search style={{ color: 'var(--muted)' }} /><span className="sr">Search projects</span>
             <input type="search" placeholder="Search client or project…" value={query} onChange={(e) => setQuery(e.target.value)} />
           </label>
@@ -240,7 +240,7 @@ export default function MyWeek() {
                 <span className="tiny muted row" style={{ gap: 4 }}>{g.items.length}<ChevronR width="11" height="11" style={{ transform: collapsed[g.id] ? 'none' : 'rotate(90deg)', transition: 'transform .15s' }} /></span>
               </button>
               {!collapsed[g.id] && g.items.map((p) => {
-                const alloc = allocs[p.id], used = totals[p.id] || 0
+                const onProject = !!allocs[p.id], alloc = typeof allocs[p.id] === 'number' ? allocs[p.id] : 0, used = totals[p.id] || 0
                 const pct = alloc ? Math.min(100, Math.round((used / alloc) * 100)) : 0
                 const overB = alloc && used > alloc
                 return (
@@ -252,6 +252,7 @@ export default function MyWeek() {
                         <span className="name">{p.name}</span>
                         <span className="tiny muted">{p.client?.name} · {p.code}</span>
                       </div>
+                      {onProject && !alloc && <span className="tag" style={{ fontSize: 10, padding: '2px 7px' }} title="You're on this project">Mine</span>}
                     </div>
                     {alloc > 0 && (
                       <div className="col" style={{ gap: 4 }}>
