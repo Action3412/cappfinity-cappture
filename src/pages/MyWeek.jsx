@@ -404,6 +404,7 @@ export default function MyWeek() {
             {notCounted > 0 && <span className="tiny" style={{ opacity: .6, textAlign: 'center' }}>plus {fmtHours(notCounted)} of lunch and breaks, not counted</span>}
           </div>
 
+          {narrow && <div className="note info">On a phone: tap a day, hit Log time and tap a project to add an hour. Tap a block to change its times, work type or note.</div>}
           {suggestions.length > 0 && (
             <div className="panel panel-b col" style={{ gap: 10 }}>
               <div className="row between"><div className="row"><Calendar style={{ color: 'var(--blue)' }} /><h2>From your Outlook</h2><Hint title="From your Outlook" text="Meetings in your calendar that look like they belong to a project, matched on the project code in the subject or who was invited. Nothing is logged until you say so. Dismiss anything that's wrong." /></div><span className="small muted">{suggestions.length} to review</span></div>
@@ -424,7 +425,7 @@ export default function MyWeek() {
             </div>
           )}
 
-          <div className="panel panel-b col" style={{ gap: 8 }}>
+          <div className="panel panel-b col shortcuts" style={{ gap: 8 }}>
             <h3>Shortcuts</h3>
             <ul className="small" style={{ margin: 0, padding: 0, listStyle: 'none', color: 'var(--text-2)' }}>
               <li className="row between" style={{ borderBottom: '1px dotted var(--line)', paddingBottom: 6 }}><span>Drag a project in</span><span className="muted">1h block at that time</span></li>
