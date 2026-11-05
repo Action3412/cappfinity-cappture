@@ -528,3 +528,13 @@ h1 + .hint { margin-left: 2px; }
   .week-right { max-width: none; width: 100%; }
   .block-handle { touch-action: none; }
 }
+@media (max-width: 720px) {
+  .hdr { gap: 10px; padding: 0 14px; flex-wrap: nowrap; }
+  .hdr .logo { font-size: 17px; }
+  .hdr .nav a { padding: 6px 8px; font-size: 13px; }
+  .hdr-btn > span:not(.avatar) { display: none; }
+  .hdr-btn { padding: 0 4px; border: 0; background: none; }
+  .page { padding: 14px; }
+  .page h1 { font-size: 20px; white-space: nowrap; }
+  .week-nav-btn { font-size: 13px; }
+}
