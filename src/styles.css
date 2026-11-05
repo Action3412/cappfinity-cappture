@@ -268,3 +268,8 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none 
 .block { overflow: visible; }
 .block .block-body, .block .block-bar { border-radius: inherit; }
 .block-bar { border-radius: 10px 0 0 10px !important; }
+.block-handle.top { top: 0; bottom: auto; align-items: flex-start; padding-top: 3px; padding-bottom: 0; }
+.block.lifted { transition: none; }
+.day { overflow: visible; }
+.day .day-progress { border-radius: 16px 16px 0 0; }
+.track { overflow: visible; }

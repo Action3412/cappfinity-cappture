@@ -66,7 +66,8 @@ export function DayColumn({ date, entries, dayHours, projById, wtById, isToday, 
 function EntryBlock({ e, top, project, workType, editing, onOpen, onResize, onMove }) {
   const ref = useRef(null)
   const [preview, setPreview] = useState(null)       // hours while resizing
-  const [drag, setDrag] = useState(null)             // {dx, dy, copy} while moving
+  const [drag, setDrag] = useState(null)             // {x, y, w, copy} while moving (fixed to viewport)
+  const [topShift, setTopShift] = useState(0)        // visual offset while resizing from the top
   const gesture = useRef(null)
 
   // Window-level listeners so a release anywhere always ends the gesture.
@@ -117,7 +118,8 @@ function EntryBlock({ e, top, project, workType, editing, onOpen, onResize, onMo
   function down(ev, mode) {
     if (ev.button !== undefined && ev.button !== 0) return
     ev.stopPropagation(); ev.preventDefault()
-    gesture.current = { mode, startX: ev.clientX, startY: ev.clientY, startH: e.hours, moved: false, target: null, copy: ev.altKey }
+    const r = ref.current.getBoundingClientRect()
+    gesture.current = { mode, startX: ev.clientX, startY: ev.clientY, startH: e.hours, moved: false, target: null, copy: ev.altKey, rect: { x: r.left, y: r.top, w: r.width } }
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up)
   }
   function move(ev) {
@@ -128,21 +130,29 @@ function EntryBlock({ e, top, project, workType, editing, onOpen, onResize, onMo
       setPreview(snap(g.startH + dy / PX_PER_HOUR))
       return
     }
+    if (g.mode === 'resize-top') {
+      g.moved = true
+      const nh = snap(g.startH - dy / PX_PER_HOUR)
+      setPreview(nh)
+      setTopShift((g.startH - nh) * PX_PER_HOUR) // bottom edge stays where it is
+      return
+    }
     if (!g.moved && Math.hypot(dx, dy) < 6) return
     if (!g.moved) document.body.classList.add('dragging')
     g.moved = true
     g.copy = ev.altKey
     g.target = targetAt(ev.clientX, ev.clientY)
     showInsert(g.target)
-    setDrag({ dx, dy, copy: g.copy })
+    setDrag({ x: g.rect.x + dx, y: g.rect.y + dy, w: g.rect.w, copy: g.copy })
   }
   function up(ev) {
     const g = gesture.current
     endGesture()
     if (!g) return
-    if (g.mode === 'resize') {
-      const nh = snap(g.startH + (ev.clientY - g.startY) / PX_PER_HOUR)
-      setPreview(null)
+    if (g.mode === 'resize' || g.mode === 'resize-top') {
+      const dy = ev.clientY - g.startY
+      const nh = snap(g.mode === 'resize' ? g.startH + dy / PX_PER_HOUR : g.startH - dy / PX_PER_HOUR)
+      setPreview(null); setTopShift(0)
       if (g.moved && nh !== e.hours) onResize(e, nh)
       return
     }
@@ -151,11 +161,10 @@ function EntryBlock({ e, top, project, workType, editing, onOpen, onResize, onMo
     if (g.target) onMove(e, g.target.date, g.target.index, g.copy)
   }
 
-  const style = {
-    top, height: h,
-    transform: drag ? `translate(${drag.dx}px, ${drag.dy}px) scale(1.02)` : undefined,
-    zIndex: drag ? 20 : editing ? 5 : undefined,
-  }
+  // While dragging, the block is pinned to the viewport so it floats over every column.
+  const style = drag
+    ? { position: 'fixed', top: drag.y, left: drag.x, width: drag.w, height: h, right: 'auto', zIndex: 1000, transform: 'scale(1.02)' }
+    : { top: top + topShift, height: h, zIndex: editing ? 5 : preview !== null ? 6 : undefined }
 
   return (
     <article ref={ref} className={`block ${drag ? 'lifted' : ''} ${preview !== null ? 'resizing' : ''} ${editing ? 'editing' : ''} ${compact ? 'compact' : ''} ${tiny ? 'tiny' : ''}`} style={style}
@@ -163,6 +172,7 @@ function EntryBlock({ e, top, project, workType, editing, onOpen, onResize, onMo
       role="button" tabIndex={0} aria-label={`${project.name}, ${fmtHours(e.hours)}. Click to edit.`}
       onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onOpen(e, ref.current) } }}>
       <span className="block-bar" style={{ background: project.colour }} />
+      <div className="block-handle top" onPointerDown={(ev) => down(ev, 'resize-top')} aria-hidden="true"><i /></div>
       <div className="block-body">
         <div className="row between" style={{ gap: 6, alignItems: 'flex-start' }}>
           <div className="col" style={{ gap: 0, minWidth: 0 }}>
