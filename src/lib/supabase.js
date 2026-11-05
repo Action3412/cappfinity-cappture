@@ -8,5 +8,7 @@ if (!url || !key) {
 }
 
 export const supabase = createClient(url, key, {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+  // Implicit flow: the sign-in link completes in whichever browser opens it
+  // (Outlook often hands links to a different browser than the one that asked).
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'implicit' },
 })

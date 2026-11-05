@@ -154,6 +154,6 @@ h1 { font-size: 24px; } h2 { font-size: 15px; } h3 { font-size: 13px; }
 
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .center { display: grid; place-items: center; padding: 60px 20px; color: var(--muted); }
-.menu { position: absolute; right: 0; top: 44px; background: #fff; color: var(--charcoal); border: 1px solid var(--line); border-radius: 12px; min-width: 200px; box-shadow: 0 8px 30px rgba(0,0,0,.12); z-index: 20; overflow: hidden; }
+.menu { position: absolute; right: 0; top: 44px; background: #fff; color: var(--charcoal); border: 1px solid var(--line); border-radius: 12px; min-width: 280px; box-shadow: 0 8px 30px rgba(0,0,0,.12); z-index: 20; overflow: hidden; }
 .menu button { display: block; width: 100%; text-align: left; padding: 10px 14px; border: 0; background: #fff; font-size: 13px; }
 .menu button:hover { background: var(--bg); }

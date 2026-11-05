@@ -22,6 +22,15 @@ export default function Shell({ children }) {
   const [name, setName] = useState('')
   const ref = useRef(null)
   useEffect(() => { setName(profile?.full_name || '') }, [profile?.full_name])
+  const [pw, setPw] = useState('')
+  const [pwMsg, setPwMsg] = useState('')
+  async function savePassword(e) {
+    e.preventDefault()
+    if (pw.length < 10) { setPwMsg('Use at least 10 characters.'); return }
+    const { error } = await supabase.auth.updateUser({ password: pw })
+    setPwMsg(error ? error.message : 'Password set — you can sign in with it next time.')
+    if (!error) setPw('')
+  }
   async function saveName(e) {
     e.preventDefault()
     const n = name.trim(); if (!n || n === profile?.full_name) return
@@ -56,6 +65,14 @@ export default function Shell({ children }) {
               <form onSubmit={saveName} style={{ padding: '10px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', gap: 6 }}>
                 <input className="input" style={{ height: 32 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" aria-label="Your name" />
                 <button className="btn sm" type="submit" style={{ height: 32, width: 'auto', padding: '0 10px' }}>Save</button>
+              </form>
+              <form onSubmit={savePassword} style={{ padding: '10px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span className="tiny label">Set or change password</span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input className="input" style={{ height: 32 }} type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="New password" aria-label="New password" autoComplete="new-password" />
+                  <button className="btn sm" type="submit" style={{ height: 32, width: 'auto', padding: '0 10px' }}>Save</button>
+                </div>
+                {pwMsg && <span className="tiny" style={{ color: pwMsg.startsWith('Password set') ? 'var(--ok)' : 'var(--bad)' }}>{pwMsg}</span>}
               </form>
               <button onClick={signOut}>Sign out</button>
             </div>
