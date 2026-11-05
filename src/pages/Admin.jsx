@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth.jsx'
 import { supabase } from '../lib/supabase.js'
@@ -12,7 +12,7 @@ const COLOURS = ['#487BFA', '#9275FA', '#FB6CF5', '#FDB601', '#2BB3A3', '#F08A4B
 const AVATARS = ['#FDE9A8', '#D8CFFE', '#FED3FB', '#C9D6FD', '#DDEFE5', '#F6D5C9']
 const av = (n = '') => AVATARS[[...n].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATARS.length]
 
-function useToast() { const [t, setT] = useState(''); return [t, (m) => { setT(m); setTimeout(() => setT(''), 2500) }] }
+function useToast() { const [t, setT] = useState(''); const timer = useRef(null); useEffect(() => () => clearTimeout(timer.current), []); return [t, (m) => { setT(m); clearTimeout(timer.current); timer.current = setTimeout(() => setT(''), 2500) }] }
 
 export default function Admin() {
   const [counts, setCounts] = useState({})
@@ -507,7 +507,7 @@ function People() {
                     <td><select className="select" style={{ height: 32, width: 150 }} value={u.manager_id || ''} onChange={(e) => patch(u, { manager_id: e.target.value || null })}><option value="">Nobody</option>{people.filter((m) => m.active && m.id !== u.id && m.role !== 'member').map((m) => <option key={m.id} value={m.id}>{m.full_name || m.email}</option>)}</select></td>
                     <td className="num"><input className="input" type="number" min="0" max="60" step="0.5" defaultValue={u.weekly_target} onBlur={(e) => Number(e.target.value) !== Number(u.weekly_target) && patch(u, { weekly_target: Number(e.target.value) })} style={{ width: 70, height: 32, textAlign: 'right' }} aria-label="Weekly target" /></td>
                     <td className="num" style={{ fontWeight: 600, color: lw === undefined ? 'var(--ok)' : lw.logged === 0 ? 'var(--bad)' : 'var(--warn)' }} title={lw ? `${fmtHours(lw.logged)} logged` : ''}>{lw === undefined ? 'On target' : lw.logged === 0 ? 'Nothing logged' : `${fmtHours(lw.short)} short`}</td>
-                    <td>{(() => { const act = activity[u.id] || {}; const online = act.last_seen_at && (Date.now() - new Date(act.last_seen_at).getTime()) < 5 * 60000
+                    <td>{(() => { const act0 = activity[u.id] || {}; const act = { ...act0, last_seen_at: act0.last_seen_at || act0.last_sign_in_at || null }; const online = act.last_seen_at && (Date.now() - new Date(act.last_seen_at).getTime()) < 5 * 60000
                       return (
                         <div className="col" style={{ gap: 2 }} title={`Last signed in: ${act.last_sign_in_at ? fmtDateTime(act.last_sign_in_at) : 'never'}${act.last_seen_at ? `\nLast seen: ${fmtDateTime(act.last_seen_at)}` : ''}`}>
                           <span className="row small" style={{ gap: 6, fontWeight: 600, color: online ? 'var(--ok)' : 'var(--text-2)' }}><i className="presence" style={{ background: online ? '#1E9E5A' : '#C4C4CC', boxShadow: online ? '0 0 0 3px rgba(30,158,90,.18)' : 'none' }} />{online ? 'Online now' : act.last_seen_at ? `Seen ${timeAgo(act.last_seen_at)}` : 'Not seen yet'}</span>

@@ -71,7 +71,7 @@ export function dayRange(entries, dayStart, dayEnd) {
 /* ------------------------------------------------------------------ */
 /* One day column: a clock track. Blocks sit at the time they happened. */
 /* ------------------------------------------------------------------ */
-export function DayColumn({ date, entries, dayHours, dayStart, dayEnd, range, projById, wtById, isToday, isFirst, editingId, onDropProject, onOpen, onResize, onMove }) {
+export function DayColumn({ date, entries, dayHours, dayStart, dayEnd, range, projById, wtById, isToday, isFirst, editingId, onOpen, onResize, onMove }) {
   const t = today()
   const trackRef = useRef(null)
   const [now, setNow] = useState(() => { const d = new Date(); return d.getHours() + d.getMinutes() / 60 })
