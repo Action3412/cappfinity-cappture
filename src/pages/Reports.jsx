@@ -7,6 +7,7 @@ import { initials } from '../components/Shell.jsx'
 import { ChevronR, Download } from '../components/Icons.jsx'
 import Hint from '../components/Hint.jsx'
 import { WeeklyColumns, HBars, Donut, PersonWeekGrid, CAT } from '../components/Charts.jsx'
+import PersonBoard from '../components/PersonBoard.jsx'
 
 const AVATARS = ['#FDE9A8', '#D8CFFE', '#FED3FB', '#C9D6FD', '#DDEFE5', '#F6D5C9']
 const av = (n = '') => AVATARS[[...n].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATARS.length]
@@ -65,12 +66,29 @@ export default function Reports() {
     return () => { dead = true }
   }, [from, to, lastWeek])
 
-  const options = useMemo(() => ({
-    clients: [...new Set(rows.map((r) => r.client))].sort(),
-    teams: [...new Set(rows.map((r) => r.team).filter(Boolean))].sort(),
-    people: [...new Map(rows.map((r) => [r.profile_id, r.person || r.email])).entries()].sort((a, b) => a[1].localeCompare(b[1])),
-    workTypes: [...new Set(rows.map((r) => r.work_type).filter(Boolean))].sort(),
-  }), [rows])
+  // Each dropdown only offers values that exist under the OTHER three filters, so you can't
+  // pick a person who isn't in the chosen team, or a client that person never touched.
+  const options = useMemo(() => {
+    const under = (skip) => rows.filter((r) =>
+      (skip === 'client' || client === 'all' || r.client === client) &&
+      (skip === 'team' || team === 'all' || r.team === team) &&
+      (skip === 'person' || person === 'all' || r.profile_id === person) &&
+      (skip === 'workType' || workType === 'all' || r.work_type === workType))
+    return {
+      clients: [...new Set(under('client').map((r) => r.client))].sort(),
+      teams: [...new Set(under('team').map((r) => r.team).filter(Boolean))].sort(),
+      people: [...new Map(under('person').map((r) => [r.profile_id, r.person || r.email])).entries()].sort((a, b) => a[1].localeCompare(b[1])),
+      workTypes: [...new Set(under('workType').map((r) => r.work_type).filter(Boolean))].sort(),
+    }
+  }, [rows, client, team, person, workType])
+  // If a selection stops being valid (e.g. you change team and the chosen person isn't in it), it resets itself.
+  useEffect(() => {
+    if (loading) return
+    if (client !== 'all' && !options.clients.includes(client)) setClient('all')
+    if (team !== 'all' && !options.teams.includes(team)) setTeam('all')
+    if (person !== 'all' && !options.people.some(([id]) => id === person)) setPerson('all')
+    if (workType !== 'all' && !options.workTypes.includes(workType)) setWorkType('all')
+  }, [options, client, team, person, workType, loading])
 
   const scoped = useMemo(() => rows.filter((r) =>
     (client === 'all' || r.client === client) && (team === 'all' || r.team === team) &&
@@ -341,6 +359,7 @@ export default function Reports() {
           </div>
         </aside>
       </div>
+      {person !== 'all' && !loading && <PersonBoard profileId={person} name={options.people.find(([id]) => id === person)?.[1] || ''} from={from} to={to} />}
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   )

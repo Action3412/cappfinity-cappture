@@ -538,3 +538,6 @@ h1 + .hint { margin-left: 2px; }
   .page h1 { font-size: 20px; white-space: nowrap; }
   .week-nav-btn { font-size: 13px; }
 }
+.board.readonly .block { cursor: pointer; }
+.board.readonly .block-handle { display: none; }
+.person-board .board { margin-top: 2px; }
