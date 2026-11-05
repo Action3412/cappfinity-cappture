@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth.jsx'
 import { supabase } from '../lib/supabase.js'
-import { weekStart, weekDays, addDays, today, dayName, shortDate, weekLabel, fmtHours, parseDuration } from '../lib/time.js'
+import { weekStart, weekDays, addDays, today, dayName, shortDate, weekLabel, fmtHours, timeToHours, hoursToTime } from '../lib/time.js'
 import { fetchProjects, fetchWorkTypes, fetchMyAllocations, fetchMyProjectTotals, fetchWeekEntries, fetchPendingSuggestions, insertEntry, updateEntry, deleteEntry } from '../lib/data.js'
 import Ring from '../components/Ring.jsx'
 import { ChevronL, ChevronR, Repeat, Search, Plus, Pencil, Calendar, Check, Info } from '../components/Icons.jsx'
 import Hint from '../components/Hint.jsx'
 import WeekPicker from '../components/WeekPicker.jsx'
-import { DayColumn, EntryPopover } from '../components/DayBoard.jsx'
+import { DayColumn, EntryPopover, startOf } from '../components/DayBoard.jsx'
 
 const DEFAULT_CHUNKS = [
   { label: '30m', hours: 0.5 }, { label: '1h', hours: 1 }, { label: '2h', hours: 2 },
@@ -23,6 +23,8 @@ export default function MyWeek() {
   const days = useMemo(() => weekDays(ws), [ws])
   const chunks = Array.isArray(settings.duration_chunks) && settings.duration_chunks.length ? settings.duration_chunks : DEFAULT_CHUNKS
   const dayHours = Number(settings.day_hours ?? 7.5)
+  const dayStart = timeToHours(settings.day_start) ?? 9
+  const dayEnd = timeToHours(settings.day_end) ?? 17.5
 
   const [projects, setProjects] = useState([])
   const [workTypes, setWorkTypes] = useState([])
@@ -105,17 +107,25 @@ export default function MyWeek() {
   const billable = entries.reduce((a, e) => a + ((projById[e.project_id]?.billable) ? e.hours || 0 : 0), 0)
   const remaining = Math.max(0, weeklyTarget - weekTotal)
 
-  // Dropping a project creates a one-hour block straight away, then opens the editor on it.
-  async function addEntry(projectId, date, anchorAfter = true) {
+  // First gap of at least `len` hours on a day, from `fromT` onwards; else straight after the last block.
+  function nextFree(date, fromT, len = 1, ignoreId = null) {
+    const list = entries.filter((x) => x.entry_date === date && x.id !== ignoreId).map((x) => [startOf(x, dayStart), startOf(x, dayStart) + x.hours]).sort((a, b) => a[0] - b[0])
+    let t = fromT
+    for (const [s0, e0] of list) { if (e0 <= t) continue; if (s0 >= t + len) break; t = e0 }
+    return Math.round(t * 4) / 4
+  }
+  // Dropping a project creates a one-hour block at that time (or the next gap), then opens the editor on it.
+  async function addEntry(projectId, date, at = null, anchorAfter = true) {
     if (!projById[projectId]) return
     setDragging(null); setOver(null)
+    const startT = nextFree(date, at ?? dayStart, 1)
     try {
-      const row = await insertEntry({ profile_id: user.id, project_id: projectId, work_type_id: null, entry_date: date, hours: 1, note: null, source: 'manual', sort_order: entries.filter((x) => x.entry_date === date).length })
+      const row = await insertEntry({ profile_id: user.id, project_id: projectId, work_type_id: null, entry_date: date, hours: 1, note: null, source: 'manual', start_time: hoursToTime(startT) })
       const e = { ...row, hours: Number(row.hours) }
       setEntries((es) => [...es, e])
       refreshTotals()
       if (anchorAfter) setTimeout(() => {
-        const el = document.querySelector(`[data-day="${date}"] .block:last-of-type`)
+        const el = document.querySelector(`[data-day="${date}"] [data-entry="${e.id}"]`) || document.querySelector(`[data-day="${date}"] .block:last-of-type`)
         setEditing({ id: e.id, anchor: el })
       }, 30)
     } catch (ex) { flash(ex.message) }
@@ -129,28 +139,18 @@ export default function MyWeek() {
     try { await updateEntry(e.id, fields); refreshTotals() }
     catch (ex) { patch(e.id, before); flash(ex.message) }
   }
-  // Move (or copy) a block to a day at a position. Renumbers that day's blocks so the order sticks.
-  async function moveEntry(e, date, index, copy = false) {
-    let moving = e
+  // Move or copy a block to a day at a clock time.
+  async function moveEntry(e, date, startT, copy = false) {
     if (copy) {
+      const at = startT ?? nextFree(date, date === e.entry_date ? startOf(e, dayStart) + e.hours : startOf(e, dayStart), e.hours)
       try {
-        const row = await insertEntry({ profile_id: user.id, project_id: e.project_id, work_type_id: e.work_type_id, entry_date: date, hours: e.hours, note: e.note, source: 'copied', sort_order: 999 })
-        moving = { ...row, hours: Number(row.hours) }
-      } catch (ex) { flash(ex.message); return }
+        const row = await insertEntry({ profile_id: user.id, project_id: e.project_id, work_type_id: e.work_type_id, entry_date: date, hours: e.hours, note: e.note, source: 'copied', start_time: hoursToTime(at) })
+        setEntries((es) => [...es, { ...row, hours: Number(row.hours) }])
+        refreshTotals(); flash(`Copied to ${dayName(date)} at ${hoursToTime(at)}`)
+      } catch (ex) { flash(ex.message) }
+      return
     }
-    const snapshot = entries
-    const others = entries.filter((x) => x.id !== moving.id)
-    const dayList = others.filter((x) => x.entry_date === date)
-    dayList.splice(Math.min(index ?? dayList.length, dayList.length), 0, { ...moving, entry_date: date })
-    const renumbered = dayList.map((x, i) => ({ ...x, sort_order: i }))
-    const next = [...others.filter((x) => x.entry_date !== date), ...renumbered]
-    setEntries(next)
-    const changed = renumbered.filter((x) => { const b = snapshot.find((y) => y.id === x.id); return !b || b.sort_order !== x.sort_order || b.entry_date !== x.entry_date })
-    try {
-      await Promise.all(changed.map((x) => updateEntry(x.id, { entry_date: x.entry_date, sort_order: x.sort_order })))
-      refreshTotals()
-      if (copy) flash(`Copied to ${dayName(date)}`)
-    } catch (ex) { setEntries(snapshot); flash(ex.message) }
+    await commit(e, { entry_date: date, start_time: hoursToTime(startT) })
   }
   async function remove(e) {
     setEditing(null)
@@ -168,7 +168,7 @@ export default function MyWeek() {
 
   async function acceptSuggestion(s) {
     try {
-      await insertEntry({ profile_id: user.id, project_id: s.matched_project_id, work_type_id: workTypes.find((w) => /meeting/i.test(w.name))?.id ?? null, entry_date: s.starts_at.slice(0, 10), hours: Number(s.hours), note: s.title, source: 'calendar' })
+      await insertEntry({ profile_id: user.id, project_id: s.matched_project_id, work_type_id: workTypes.find((w) => /meeting/i.test(w.name))?.id ?? null, entry_date: s.starts_at.slice(0, 10), hours: Number(s.hours), note: s.title, source: 'calendar', start_time: new Date(s.starts_at).toTimeString().slice(0, 5) })
       await supabase.from('calendar_suggestions').update({ status: 'accepted' }).eq('id', s.id)
       load()
     } catch (ex) { flash(ex.message) }
@@ -180,7 +180,7 @@ export default function MyWeek() {
 
   // ---- drag & drop
   const onDragStart = (p) => (ev) => { ev.dataTransfer.setData('text/plain', p.id); ev.dataTransfer.effectAllowed = 'copy'; setDragging(p.id) }
-  const onDropProject = (ev, date) => { const id = ev.dataTransfer.getData('text/plain') || dragging; if (id) addEntry(id, date) }
+  const onDropProject = (ev, date, at) => { const id = ev.dataTransfer.getData('text/plain') || dragging; if (id) addEntry(id, date, at) }
   const quickAddDate = days.includes(today()) ? today() : days[0]
 
   const t = today()
@@ -192,7 +192,7 @@ export default function MyWeek() {
       <div className="row between wrap" style={{ marginBottom: 18, gap: 12 }}>
         <div className="row" style={{ gap: 12 }}>
           <h1>My week</h1>
-          <Hint title="How this works" text="Drag a project from the left onto a day and it lands as a one-hour block. Pull the block's bottom edge to make it longer or shorter, drag it to another day if you got the day wrong, and click it to set the work type or add a note. Keep going until each day is full and the ring on the right completes." />
+          <Hint title="How this works" text="Each column is your working day on a clock. Drag a project in at the time you started it and it lands as a one-hour block. Pull either end to set how long, drag it up, down or across to another day, and click it to set the work type or add a note. Gaps are fine, that's lunch. Keep going until the ring on the right completes." />
           <div className="row" style={{ gap: 2, position: 'relative' }}>
             <button className="btn sm ghost" aria-label="Previous week" title="Previous week (←)" onClick={() => nav(`/week/${addDays(ws, -7)}`)}><ChevronL /></button>
             <button type="button" className="week-nav-btn" onClick={() => setPickerOpen((o) => !o)} aria-haspopup="dialog" aria-expanded={pickerOpen} title="Pick a week">
@@ -245,7 +245,7 @@ export default function MyWeek() {
                 const overB = alloc && used > alloc
                 return (
                   <div key={p.id} className="proj" draggable onDragStart={onDragStart(p)} onDragEnd={() => { setDragging(null); setOver(null) }}
-                    onClick={() => addEntry(p.id, quickAddDate)} title={`Drag onto a day, or click to add to ${dayName(quickAddDate)}`}>
+                    onClick={() => addEntry(p.id, quickAddDate, null)} title={`Drag onto a day, or click to add to ${dayName(quickAddDate)}`}>
                     <div className="row" style={{ gap: 10 }}>
                       <span className="swatch" style={{ background: p.colour }} />
                       <div className="col" style={{ gap: 0, minWidth: 0, flex: 1 }}>
@@ -271,17 +271,17 @@ export default function MyWeek() {
         <main className="week-main">
           <div className="days">
             {days.map((d) => (
-              <DayColumn key={d} date={d} entries={entries.filter((e) => e.entry_date === d)} dayHours={dayHours} projById={projById} wtById={wtById}
-                isToday={d === t} isFirst={d === days[0]} over={over === d} editingId={editing?.id}
+              <DayColumn key={d} date={d} entries={entries.filter((e) => e.entry_date === d)} dayHours={dayHours} dayStart={dayStart} dayEnd={dayEnd} projById={projById} wtById={wtById}
+                isToday={d === t} isFirst={d === days[0]} editingId={editing?.id}
                 onDropProject={onDropProject}
                 onOpen={(e, el) => setEditing({ id: e.id, anchor: el })}
-                onResize={(e, h) => commit(e, { hours: h })}
-                onMove={(e, date, index, copy) => moveEntry(e, date, index, copy)} />
+                onResize={(e, h, startT) => commit(e, { hours: h, start_time: hoursToTime(startT) })}
+                onMove={(e, date, startT, copy) => moveEntry(e, date, startT, copy)} />
             ))}
           </div>
           {editingEntry && (
             <EntryPopover e={editingEntry} anchor={editing.anchor} project={projById[editingEntry.project_id]} workTypes={workTypes} chunks={chunks} days={days}
-              onChange={(f) => commit(editingEntry, f)} onRemove={remove} onCopy={(e, date) => moveEntry(e, date, undefined, true)} onClose={() => setEditing(null)} />
+              onChange={(f) => commit(editingEntry, f)} onRemove={remove} onCopy={(e, date) => moveEntry(e, date, date === e.entry_date ? null : startOf(e, dayStart), true)} onClose={() => setEditing(null)} />
           )}
         </main>
 
@@ -325,10 +325,10 @@ export default function MyWeek() {
           <div className="panel panel-b col" style={{ gap: 8 }}>
             <h3>Shortcuts</h3>
             <ul className="small" style={{ margin: 0, padding: 0, listStyle: 'none', color: 'var(--text-2)' }}>
-              <li className="row between" style={{ borderBottom: '1px dotted var(--line)', paddingBottom: 6 }}><span>Drag a project in</span><span className="muted">1h block on that day</span></li>
+              <li className="row between" style={{ borderBottom: '1px dotted var(--line)', paddingBottom: 6 }}><span>Drag a project in</span><span className="muted">1h block at that time</span></li>
               <li className="row between" style={{ borderBottom: '1px dotted var(--line)', padding: '6px 0' }}><span>Click a project</span><span className="muted">adds to {dayName(quickAddDate)}</span></li>
-              <li className="row between" style={{ borderBottom: '1px dotted var(--line)', padding: '6px 0' }}><span>Pull a block's edge</span><span className="muted">change the time</span></li>
-              <li className="row between" style={{ borderBottom: '1px dotted var(--line)', padding: '6px 0' }}><span>Drag a block</span><span className="muted">move or reorder</span></li>
+              <li className="row between" style={{ borderBottom: '1px dotted var(--line)', padding: '6px 0' }}><span>Pull either end</span><span className="muted">start or finish time</span></li>
+              <li className="row between" style={{ borderBottom: '1px dotted var(--line)', padding: '6px 0' }}><span>Drag a block</span><span className="muted">move in the day or across</span></li>
               <li className="row between" style={{ borderBottom: '1px dotted var(--line)', padding: '6px 0' }}><span>Alt + drag a block</span><span className="muted">copy it</span></li>
               <li className="row between" style={{ borderBottom: '1px dotted var(--line)', padding: '6px 0' }}><span>Click a block</span><span className="muted">work type and note</span></li>
               <li className="row between" style={{ paddingTop: 6 }}><span>← →</span><span className="muted">previous / next week</span></li>

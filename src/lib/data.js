@@ -33,9 +33,9 @@ export async function fetchMyProjectTotals(uid) {
 
 export async function fetchWeekEntries(uid, weekStart, weekEnd) {
   const { data, error } = await supabase.from('time_entries')
-    .select('id, project_id, work_type_id, entry_date, hours, note, source, sort_order')
+    .select('id, project_id, work_type_id, entry_date, hours, note, source, sort_order, start_time')
     .eq('profile_id', uid).gte('entry_date', weekStart).lte('entry_date', weekEnd)
-    .order('sort_order').order('created_at')
+    .order('start_time').order('created_at')
   if (error) throw error
   return data || []
 }

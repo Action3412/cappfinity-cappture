@@ -64,3 +64,8 @@ export function quarterRange(d = new Date()) {
   const a = new Date(d.getFullYear(), q * 3, 1), b = new Date(d.getFullYear(), q * 3 + 3, 0)
   return [toISODate(a), toISODate(b)]
 }
+
+// "09:15:00" -> 9.25 ; 9.25 -> "09:15"
+export function timeToHours(t) { if (!t) return null; const [h, m] = String(t).split(':').map(Number); return h + (m || 0) / 60 }
+export function hoursToTime(h) { h = Math.max(0, Math.min(23.99, h)); const hh = Math.floor(h), mm = Math.round((h - hh) * 60); return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}` }
+export function fmtClock(h) { const hh = Math.floor(h), mm = Math.round((h - hh) * 60); return `${hh}:${String(mm).padStart(2, '0')}` }

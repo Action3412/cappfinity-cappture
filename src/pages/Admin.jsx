@@ -377,10 +377,12 @@ function Settings() {
   return (
     <>
       <section className="panel panel-b col" style={{ gap: 14 }}>
-        <h2>Working week<Hint title="Working week" text="Company-wide defaults. The weekly target is what the ring on My week fills towards and what people get chased against. Hours in a day sets when a day column turns green and what a full day pill means. Allowed domains are email domains that can sign in without an invite." /></h2>
+        <h2>Working week<Hint title="Working week" text="Company-wide defaults. The weekly target is what the ring on My week fills towards and what people get chased against. Hours in a day sets when a day column turns green and what a full day pill means. Day starts and ends set the clock range each column shows by default (it stretches automatically if someone works outside it). Allowed domains are email domains that can sign in without an invite." /></h2>
         <div className="form-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
           <label className="field">Default hours per week<input className="input" type="number" step="0.5" defaultValue={s.weekly_target_hours} onBlur={(e) => save('weekly_target_hours', Number(e.target.value))} /></label>
           <label className="field">Hours in a working day<input className="input" type="number" step="0.25" defaultValue={s.day_hours} onBlur={(e) => save('day_hours', Number(e.target.value))} /></label>
+          <label className="field">Day starts<input className="input" type="time" step="900" defaultValue={s.day_start || '09:00'} onBlur={(e) => save('day_start', e.target.value)} /></label>
+          <label className="field">Day ends<input className="input" type="time" step="900" defaultValue={s.day_end || '17:30'} onBlur={(e) => save('day_end', e.target.value)} /></label>
           <label className="field">Allowed sign-in domains<input className="input" defaultValue={domains} placeholder="cappfinity.com" onBlur={(e) => save('allowed_email_domains', e.target.value.split(',').map((x) => x.trim().toLowerCase()).filter(Boolean))} /></label>
         </div>
         <span className="small muted">Individual targets, for part-timers say, are set per person under People and override this default.</span>
