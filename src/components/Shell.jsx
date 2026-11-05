@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../lib/auth.jsx'
+import { supabase } from '../lib/supabase.js'
 
 export function Logo() {
   return (
@@ -16,9 +17,17 @@ export function initials(name = '') {
 }
 
 export default function Shell({ children }) {
-  const { profile, isManager, isAdmin, signOut } = useAuth()
+  const { profile, isManager, isAdmin, signOut, refreshProfile } = useAuth()
   const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
   const ref = useRef(null)
+  useEffect(() => { setName(profile?.full_name || '') }, [profile?.full_name])
+  async function saveName(e) {
+    e.preventDefault()
+    const n = name.trim(); if (!n || n === profile?.full_name) return
+    await supabase.from('profiles').update({ full_name: n }).eq('id', profile.id)
+    refreshProfile()
+  }
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
     document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h)
@@ -44,6 +53,10 @@ export default function Shell({ children }) {
               <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line-soft)' }} className="small muted">
                 {profile?.email}<br />{profile?.teams?.name || 'No team'} · {profile?.role}
               </div>
+              <form onSubmit={saveName} style={{ padding: '10px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', gap: 6 }}>
+                <input className="input" style={{ height: 32 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" aria-label="Your name" />
+                <button className="btn sm" type="submit" style={{ height: 32, width: 'auto', padding: '0 10px' }}>Save</button>
+              </form>
               <button onClick={signOut}>Sign out</button>
             </div>
           )}

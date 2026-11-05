@@ -149,6 +149,8 @@ h1 { font-size: 24px; } h2 { font-size: 15px; } h3 { font-size: 13px; }
 /* Login */
 .login { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--header); }
 .login-card { width: 100%; max-width: 420px; background: #fff; border-radius: 20px; padding: 32px; display: flex; flex-direction: column; gap: 18px; }
+.login-card .logo { color: var(--charcoal); }
+.login-card .logo .ring > div { color: #fff; }
 
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .center { display: grid; place-items: center; padding: 60px 20px; color: var(--muted); }
