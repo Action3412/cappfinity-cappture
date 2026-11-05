@@ -1,7 +1,12 @@
+import { useEffect, useState } from 'react'
+
 export default function Ring({ value, target, size = 150, stroke = 12, track = 'rgba(255,255,255,0.12)', className = '', children }) {
   const r = (size - stroke) / 2
   const c = 2 * Math.PI * r
-  const frac = target > 0 ? Math.min(1, value / target) : 0
+  // Start from empty on first paint so the ring draws itself in
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { const id = requestAnimationFrame(() => setMounted(true)); return () => cancelAnimationFrame(id) }, [])
+  const frac = !mounted ? 0 : target > 0 ? Math.min(1, value / target) : 0
   return (
     <div className={`ring-wrap ${className}`} style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`${value} of ${target} hours`}>

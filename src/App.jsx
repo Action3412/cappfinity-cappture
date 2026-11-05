@@ -5,6 +5,7 @@ import Login from './pages/Login.jsx'
 import MyWeek from './pages/MyWeek.jsx'
 import Reports from './pages/Reports.jsx'
 import Admin from './pages/Admin.jsx'
+import NotFound from './pages/NotFound.jsx'
 import Pending from './pages/Pending.jsx'
 
 export default function App() {
@@ -22,7 +23,7 @@ export default function App() {
         <Route path="/week/:weekStart" element={<MyWeek />} />
         <Route path="/reports" element={isManager ? <Reports /> : <Navigate to="/" replace />} />
         <Route path="/admin/*" element={isAdmin ? <Admin /> : <Navigate to="/" replace />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </Shell>
   )

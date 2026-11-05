@@ -8,6 +8,7 @@ import { ChevronR, Download } from '../components/Icons.jsx'
 import Hint from '../components/Hint.jsx'
 import { WeeklyColumns, HBars, Donut, PersonWeekGrid, CAT } from '../components/Charts.jsx'
 import PersonBoard from '../components/PersonBoard.jsx'
+import Empty from '../components/Empty.jsx'
 
 const AVATARS = ['#FDE9A8', '#D8CFFE', '#FED3FB', '#C9D6FD', '#DDEFE5', '#F6D5C9']
 const av = (n = '') => AVATARS[[...n].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATARS.length]
@@ -252,13 +253,15 @@ export default function Reports() {
         </div>
       </div>
 
-      <div className="kpis">
+      {loading && rows.length === 0 && <div className="kpis" aria-hidden="true">{[0, 1, 2, 3].map((i) => <div key={i} className="skel" style={{ height: 96 }} />)}</div>}
+      <div className="kpis" style={loading && rows.length === 0 ? { display: 'none' } : undefined}>
         <div className="kpi dark"><span className="small" style={{ opacity: .7 }}>Hours logged<Hint title="Hours logged" text="Total hours in the current filters, with the billable share underneath. Billable means time on client projects rather than internal ones." /></span><b>{fmtHours(totalLogged)}</b><span className="small" style={{ opacity: .7 }}>{fmtHours(billable)} billable · {scoped.length} entries</span></div>
         <div className="kpi"><span className="small muted">Billable share<Hint title="Billable share" text="The percentage of logged hours that went on client work. A useful health check for a team or a person: low means a lot of pitching, admin or leave in the period." /></span><b>{totalLogged ? Math.round((billable / totalLogged) * 100) : 0}%</b><div className="bar"><div style={{ width: `${totalLogged ? Math.round((billable / totalLogged) * 100) : 0}%`, background: 'var(--spectrum)' }} /></div></div>
         <div className="kpi"><span className="small muted">Budget used <span className="tiny">(project to date)</span><Hint title="Budget used" text="For projects that have a budget, how much of it has been used so far. This one always looks at the whole life of each project, not just the dates you've filtered to, because a budget is a total not a monthly figure." /></span><b>{budgetAlloc ? `${Math.round((budgetUsed / budgetAlloc) * 100)}%` : '—'}</b><span className="small muted">{budgetAlloc ? `${fmtHours(budgetUsed)} of ${budgetAlloc}h across ${budgetInScope.length} budgeted ${budgetInScope.length === 1 ? 'project' : 'projects'}` : 'no budgeted projects in scope'}</span></div>
         <div className="kpi"><span className="small muted">Short of target last week<Hint align="right" title="Short of target" text="People who logged less than their weekly target (normally 37.5h) last week. The full list, with a Remind button for each, is further down the page." /></span><b style={{ color: shortfalls.length ? 'var(--bad)' : 'var(--ok)' }}>{shortfalls.length}</b><span className="small muted">{isAdmin ? 'across everyone' : 'in your team'} · week of {longDate(lastWeek)}</span></div>
       </div>
 
+      {!loading && scoped.length === 0 && <section className="panel" style={{ marginTop: 14 }}><Empty kind="report" title="Nothing logged for this view" text="Widen the period or clear a filter. Hours appear here as soon as someone logs them." /></section>}
       {!loading && scoped.length > 0 && (
         <>
           <div className="charts">

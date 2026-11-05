@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase.js'
-import { Logo } from '../components/Shell.jsx'
 
 export default function Login() {
-  const [mode, setMode] = useState('link') // 'link' | 'password'
+  const [mode, setMode] = useState('password') // 'password' | 'link'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [sent, setSent] = useState(false)
@@ -40,11 +39,17 @@ export default function Login() {
 
   return (
     <div className="login">
+      <div className="login-brand">
+        <div className="login-orb" aria-hidden="true"><span /><span /><span /></div>
+        <img className="login-mark" src="/brand/icon-dark.svg" alt="" width="84" height="84" draggable="false" />
+        <h1 className="login-title">Cappture<span className="dot">.</span></h1>
+        <p className="login-tag">Log your week in minutes.<br />See where the time goes.</p>
+        <img className="login-lockup" src="/brand/lockup-dark.svg" alt="Cappfinity. Make the best talent decisions." draggable="false" />
+      </div>
       <div className="login-card">
-        <Logo />
         <div className="col" style={{ gap: 4 }}>
-          <h1 style={{ fontSize: 22 }}>Log your week in a minute.</h1>
-          <p className="muted" style={{ margin: 0 }}>Sign in with your Cappfinity email.</p>
+          <h2 style={{ fontSize: 22 }}>Sign in</h2>
+          <p className="muted" style={{ margin: 0 }}>Use your Cappfinity email.</p>
         </div>
 
         {sent ? (
@@ -63,7 +68,7 @@ export default function Login() {
                 <input className="input" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
               </label>
             )}
-            <button className="btn primary" type="submit" disabled={busy} style={{ justifyContent: 'center' }}>
+            <button className="btn primary" type="submit" disabled={busy} style={{ justifyContent: 'center', height: 44 }}>
               {busy ? 'One moment…' : mode === 'link' ? 'Email me a sign-in link' : 'Sign in'}
             </button>
             <button type="button" className="btn ghost sm" style={{ justifyContent: 'center' }} onClick={() => { setMode(mode === 'link' ? 'password' : 'link'); setErr('') }}>
@@ -76,6 +81,7 @@ export default function Login() {
               <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="0" y="0" width="7.5" height="7.5" fill="#F25022"/><rect x="8.5" y="0" width="7.5" height="7.5" fill="#7FBA00"/><rect x="0" y="8.5" width="7.5" height="7.5" fill="#00A4EF"/><rect x="8.5" y="8.5" width="7.5" height="7.5" fill="#FFB900"/></svg>
               Continue with Microsoft
             </button>
+            <p className="tiny muted" style={{ margin: 0, textAlign: 'center' }}>First time here? Your admin gives you a temporary password. Set your own once you're in.</p>
           </form>
         )}
         {err && <div className="banner warn" style={{ display: 'flex' }}>{err}</div>}

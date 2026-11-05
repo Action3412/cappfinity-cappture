@@ -6,6 +6,7 @@ import { fmtHours, timeAgo, fmtDateTime, weekStart, addDays, today } from '../li
 import { initials } from '../components/Shell.jsx'
 import { X } from '../components/Icons.jsx'
 import Hint from '../components/Hint.jsx'
+import Empty from '../components/Empty.jsx'
 import SortTh, { useSort } from '../components/SortTh.jsx'
 
 const COLOURS = ['#487BFA', '#9275FA', '#FB6CF5', '#FDB601', '#2BB3A3', '#F08A4B', '#5C6BC0', '#26A69A']
@@ -194,7 +195,7 @@ function Projects() {
                   </tr>
                 )
               })}
-              {!list.length && <tr><td colSpan="7" className="center">{filtering ? 'Nothing matches those filters.' : 'No projects yet. Add the first one above.'}</td></tr>}
+              {!list.length && <tr><td colSpan="7"><Empty compact kind={filtering ? 'search' : 'projects'} title={filtering ? 'Nothing matches those filters' : 'No projects yet'} text={filtering ? 'Clear a filter to see more.' : 'Add the first one in the form above.'} /></td></tr>}
             </tbody>
           </table>
         </div>

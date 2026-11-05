@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase.js'
 export function Logo() {
   return (
     <div className="logo">
-      <div className="ring"><div>C</div></div>
+      <img src="/brand/icon-dark.svg" alt="" width="32" height="32" draggable="false" />
       <span>Cappture<span className="dot">.</span></span>
     </div>
   )

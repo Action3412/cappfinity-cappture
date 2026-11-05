@@ -8,6 +8,8 @@ import Ring from '../components/Ring.jsx'
 import { ChevronL, ChevronR, Repeat, Search, Plus, Pencil, Calendar, Check, Info } from '../components/Icons.jsx'
 import Hint from '../components/Hint.jsx'
 import WeekPicker from '../components/WeekPicker.jsx'
+import Empty from '../components/Empty.jsx'
+import Tour, { tourSeen } from '../components/Tour.jsx'
 import { DayColumn, EntryPopover, TimeGutter, dayRange, startOf, boardTargetAt, showGhost } from '../components/DayBoard.jsx'
 
 const DEFAULT_CHUNKS = [
@@ -22,7 +24,7 @@ function useNarrow(px = 720) {
 }
 
 export default function MyWeek() {
-  const { user, weeklyTarget, settings } = useAuth()
+  const { user, profile, weeklyTarget, settings } = useAuth()
   const params = useParams()
   const nav = useNavigate()
   const ws = params.weekStart && /^\d{4}-\d{2}-\d{2}$/.test(params.weekStart) ? weekStart(params.weekStart) : weekStart(today())
@@ -51,7 +53,12 @@ export default function MyWeek() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const [approval, setApproval] = useState(null) // week_approvals row for this week, if any
+  const [streak, setStreak] = useState(0)
+  const [tour, setTour] = useState(false)
+  const [celebrate, setCelebrate] = useState(false)
+  const wasShort = useRef(null)
   const narrow = useNarrow()
+  useEffect(() => { if (!loading && !narrow && !tourSeen()) setTour(true) }, [loading, narrow])
   const [selDay, setSelDay] = useState(() => (weekDays(ws).includes(today()) ? today() : weekDays(ws)[0]))
   const [sheetOpen, setSheetOpen] = useState(false)
   useEffect(() => { setSelDay(days.includes(today()) ? today() : days[0]) }, [days])
@@ -63,18 +70,23 @@ export default function MyWeek() {
     const seq = ++loadSeq.current
     try {
       setErr('')
-      const [p, w, a, t, e, s, ap] = await Promise.all([
+      const [p, w, a, t, e, s, ap, hist] = await Promise.all([
         fetchProjects(), fetchWorkTypes(), fetchMyAllocations(user.id), fetchMyProjectTotals(),
         fetchWeekEntries(user.id, days[0], days[4]), fetchPendingSuggestions(user.id),
         supabase.from('week_approvals').select('*').eq('profile_id', user.id).eq('week_start', days[0]).maybeSingle().then(({ data }) => data),
+        supabase.from('v_entries').select('entry_date, hours, counts_toward_target').eq('profile_id', user.id).gte('entry_date', addDays(days[0], -84)).lt('entry_date', days[0]).then(({ data }) => data || []),
       ])
       if (seq !== loadSeq.current) return // a newer week was requested while this one loaded
       setProjects(p); setWorkTypes(w); setTotals(t); setSuggestions(s); setApproval(ap || null)
+      // Streak: consecutive complete weeks immediately before this one
+      const byWeek = {}; hist.forEach((r) => { if (r.counts_toward_target === false) return; const k = weekStart(r.entry_date); byWeek[k] = (byWeek[k] || 0) + Number(r.hours) })
+      let n = 0; for (let w = addDays(days[0], -7); n < 12; w = addDays(w, -7)) { if ((byWeek[w] || 0) >= weeklyTarget - 0.01) n++; else break }
+      setStreak(n)
       const am = {}; a.forEach((r) => { am[r.project_id] = r.hours === null ? true : Number(r.hours) }); setAllocs(am)
       setEntries(e.map((x) => ({ ...x, hours: Number(x.hours) })))
     } catch (ex) { setErr(ex.message || String(ex)) }
     finally { setLoading(false) }
-  }, [user.id, days])
+  }, [user.id, days, weeklyTarget])
 
   useEffect(() => { setLoading(true); load() }, [load])
   useEffect(() => {
@@ -266,6 +278,22 @@ export default function MyWeek() {
 
   const t = today()
   const isCurrentWeek = ws === weekStart(t)
+  const firstName = (profile?.full_name || '').split(' ')[0]
+  const hour = new Date().getHours()
+  const greeting = `${hour < 12 ? 'Morning' : hour < 17 ? 'Afternoon' : 'Evening'}${firstName ? `, ${firstName}` : ''}.`
+  // The one most useful thing: which day so far is furthest behind
+  const dayTotals = days.map((d) => ({ d, tot: entries.filter((e) => e.entry_date === d && countsE(e)).reduce((a, e) => a + (e.hours || 0), 0) }))
+  const behind = dayTotals.filter((x) => x.d <= t && x.tot < dayHours - 0.01).sort((a, b) => a.tot - b.tot)[0]
+  const nudge = remaining <= 0 ? null : behind ? (behind.tot === 0 ? `${dayName(behind.d)} has nothing on it yet.` : `${dayName(behind.d)} is the one to top up.`) : null
+  // Week-complete moment: only when it happens live, not on page load
+  useEffect(() => {
+    if (loading) return
+    if (wasShort.current === null) { wasShort.current = remaining > 0; return }
+    if (wasShort.current && remaining <= 0) { setCelebrate(true); const id = setTimeout(() => setCelebrate(false), 3200); wasShort.current = false; return () => clearTimeout(id) }
+    if (remaining > 0) wasShort.current = true
+  }, [remaining, loading])
+  const doneLines = ['That\'s the week. Go and enjoy it.', 'All logged. Nicely done.', 'Week complete. Put the kettle on.', 'Done and dusted. See you Monday.']
+  const doneLine = doneLines[(parseInt(ws.replace(/-/g, ''), 10) || 0) % doneLines.length]
   const editingEntry = editing ? entries.find((x) => x.id === editing.id) : null
   const weekRange = dayRange(entries, dayStart, dayEnd)
 
@@ -273,7 +301,7 @@ export default function MyWeek() {
     <div className="page">
       <div className="row between wrap" style={{ marginBottom: 18, gap: 12 }}>
         <div className="row" style={{ gap: 12 }}>
-          <h1>My week</h1>
+          <h1>{isCurrentWeek ? greeting : 'My week'}</h1>
           <Hint title="How this works" text="Each column is your working day on a clock. Drag a project in at the time you started it and it lands as a one-hour block. Pull either end to set how long, drag it up, down or across to another day, and click it to set the work type or add a note. Gaps are fine, that's lunch. Keep going until the ring on the right completes." />
           <div className="row" style={{ gap: 2, position: 'relative' }}>
             <button className="btn sm ghost" aria-label="Previous week" title="Previous week (←)" onClick={() => nav(`/week/${addDays(ws, -7)}`)}><ChevronL /></button>
@@ -286,8 +314,8 @@ export default function MyWeek() {
           </div>
         </div>
         <div className="row" style={{ gap: 10 }}>
-          {!loading && remaining > 0 && <span className="banner warn"><Info /> {fmtHours(remaining)} still to log this week</span>}
-          {!loading && remaining === 0 && <span className="banner ok"><Check /> Week complete, nice one</span>}
+          {!loading && remaining > 0 && <span className="banner warn"><Info /> {fmtHours(remaining)} to go{nudge && isCurrentWeek ? `. ${nudge}` : ' this week'}</span>}
+          {!loading && remaining === 0 && <span className="banner ok"><Check /> {doneLine}</span>}
           {approvalsOn && !loading && (
             approval?.status === 'approved' ? <span className="approval-chip approved" title={`Approved ${approval.decided_at ? new Date(approval.decided_at).toLocaleDateString('en-GB') : ''}`}><Check /> Approved</span>
             : approval?.status === 'submitted' ? <span className="row" style={{ gap: 6 }}><span className="approval-chip submitted">Awaiting approval</span><button className="btn sm" onClick={withdrawWeek}>Withdraw</button></span>
@@ -323,7 +351,7 @@ export default function MyWeek() {
             )}
           </div>
           <div className="proj-list">
-          {!loading && filtering && visibleProjects.length === 0 && <div className="note info">Nothing matches. <button className="btn sm ghost" style={{ height: 24 }} onClick={() => { setQuery(''); setQuick('all'); setClientFilter('all') }}>Clear filters</button></div>}
+          {!loading && filtering && visibleProjects.length === 0 && <Empty compact kind="search" title="Nothing matches" text="Try a shorter search or clear the filters." action={<button className="btn sm ghost" onClick={() => { setQuery(''); setQuick('all'); setClientFilter('all') }}>Clear filters</button>} />}
           {clientGroups.map((g) => (
             <div className="col" style={{ gap: 6 }} key={g.id}>
               <button type="button" className="client-head" onClick={() => toggleClient(g.id)} aria-expanded={!collapsed[g.id]}>
@@ -355,7 +383,7 @@ export default function MyWeek() {
               })}
             </div>
           ))}
-          {!loading && projects.length === 0 && <div className="note info">No projects yet. An admin adds them under Admin, Client projects.</div>}
+          {!loading && projects.length === 0 && <Empty compact kind="projects" title="No projects yet" text="An admin adds them under Admin, Client projects. Once they're in, they show up here." />}
           </div>
         </aside>
 
@@ -369,7 +397,12 @@ export default function MyWeek() {
               })}
             </div>
           )}
-          <div className={`board ${locked ? 'locked' : ''} ${narrow ? 'single' : ''}`}>
+          {loading && entries.length === 0 && projects.length === 0 && (
+            <div className="board" aria-hidden="true" style={{ padding: 12, gap: 10, gridTemplateColumns: narrow ? '1fr' : 'repeat(5, minmax(0, 1fr))' }}>
+              {(narrow ? [0] : [0, 1, 2, 3, 4]).map((i) => <div key={i} className="skel" style={{ height: 420 }} />)}
+            </div>
+          )}
+          <div className={`board ${locked ? 'locked' : ''} ${narrow ? 'single' : ''}`} style={loading && entries.length === 0 && projects.length === 0 ? { display: 'none' } : undefined}>
             <TimeGutter from={weekRange[0]} to={weekRange[1]} dayStart={dayStart} dayEnd={dayEnd} />
             {(narrow ? [selDay] : days).map((d) => (
               <DayColumn key={d} date={d} entries={entries.filter((e) => e.entry_date === d)} dayHours={dayHours} dayStart={dayStart} dayEnd={dayEnd} range={weekRange} projById={projById} wtById={wtById}
@@ -388,7 +421,8 @@ export default function MyWeek() {
 
         {/* Right rail */}
         <aside className="week-right col" style={{ gap: 14 }}>
-          <div className="dark ring-card">
+          <div className={`dark ring-card ${celebrate ? 'celebrate' : ''}`}>
+            {celebrate && <span className="sweep" aria-hidden="true" />}
             <Ring value={weekTotal} target={weeklyTarget}>
               <b>{fmtHours(weekTotal).replace(/h$/, '')}</b>
               <span className="small" style={{ opacity: .7 }}>of {weeklyTarget} hrs</span>
@@ -397,6 +431,7 @@ export default function MyWeek() {
               <Hint align="center" title="Your week" text="Everything you've logged this week against your target (normally 37.5 hours). Billable is time on client projects. Internal is pitches, admin, learning, leave and so on. Both count towards the target, so a week off still adds up to 37.5. Lunch and breaks are the exception: log them if you like, they just don't count." />
               {remaining > 0 ? `${fmtHours(remaining)} to go this week` : weekTotal > weeklyTarget ? `${fmtHours(weekTotal - weeklyTarget)} over, all logged` : `All ${weeklyTarget} hours logged`}
             </div>
+            {streak >= 2 && <span className="streak" title={`${streak} complete weeks in a row before this one`}>{streak} weeks in a row</span>}
             <div className="stat-grid">
               <div className="col" style={{ gap: 2 }}><span className="tiny" style={{ opacity: .7 }}>Billable</span><b style={{ color: 'var(--gold)' }}>{fmtHours(billable)}</b></div>
               <div className="col" style={{ gap: 2 }}><span className="tiny" style={{ opacity: .7 }}>Internal</span><b>{fmtHours(weekTotal - billable)}</b></div>
@@ -440,6 +475,7 @@ export default function MyWeek() {
         </aside>
       </div>
       {narrow && !sheetOpen && !locked && <button className="fab" onClick={() => setSheetOpen(true)} aria-label="Log time"><Plus /> Log time</button>}
+      {tour && <Tour onClose={() => setTour(false)} />}
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   )
