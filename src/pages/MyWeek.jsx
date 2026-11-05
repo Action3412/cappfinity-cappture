@@ -7,6 +7,7 @@ import { fetchProjects, fetchWorkTypes, fetchMyAllocations, fetchMyProjectTotals
 import Ring from '../components/Ring.jsx'
 import { ChevronL, ChevronR, Repeat, Search, Plus, Pencil, Calendar, Check, Info } from '../components/Icons.jsx'
 import Hint from '../components/Hint.jsx'
+import WeekPicker from '../components/WeekPicker.jsx'
 
 const DEFAULT_CHUNKS = [
   { label: '30m', hours: 0.5 }, { label: '1h', hours: 1 }, { label: '2h', hours: 2 },
@@ -29,6 +30,10 @@ export default function MyWeek() {
   const [entries, setEntries] = useState([])
   const [suggestions, setSuggestions] = useState([])
   const [query, setQuery] = useState('')
+  const [quick, setQuick] = useState('all') // all | mine | recent | client | internal
+  const [clientFilter, setClientFilter] = useState('all')
+  const [collapsed, setCollapsed] = useState(() => { try { return JSON.parse(localStorage.getItem('cappture.collapsed') || '{}') } catch { return {} } })
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [dragging, setDragging] = useState(null)
   const [over, setOver] = useState(null)
   const [toast, setToast] = useState('')
@@ -52,23 +57,46 @@ export default function MyWeek() {
   }, [user.id, days])
 
   useEffect(() => { setLoading(true); load() }, [load])
+  useEffect(() => {
+    const k = (e) => {
+      if (e.target && /input|textarea|select/i.test(e.target.tagName)) return
+      if (e.key === 'ArrowLeft') nav(`/week/${addDays(ws, -7)}`)
+      if (e.key === 'ArrowRight') nav(`/week/${addDays(ws, 7)}`)
+    }
+    document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k)
+  }, [ws, nav])
+  function toggleClient(id) {
+    setCollapsed((c) => { const n = { ...c, [id]: !c[id] }; try { localStorage.setItem('cappture.collapsed', JSON.stringify(n)) } catch {} return n })
+  }
 
   const projById = useMemo(() => Object.fromEntries(projects.map((p) => [p.id, p])), [projects])
   const wtById = useMemo(() => Object.fromEntries(workTypes.map((w) => [w.id, w])), [workTypes])
 
   // ---- project list: allocated first, then used, then the rest; internal last
+  const clientOptions = useMemo(() => {
+    const m = new Map(); projects.forEach((p) => { if (p.client && !p.client.is_internal) m.set(p.client.id, p.client.name) })
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]))
+  }, [projects])
   const visibleProjects = useMemo(() => {
     const q = query.trim().toLowerCase()
     const score = (p) => (allocs[p.id] ? 0 : totals[p.id] ? 1 : 2)
     return projects
       .filter((p) => !q || `${p.name} ${p.code} ${p.client?.name}`.toLowerCase().includes(q))
+      .filter((p) => quick === 'all' || (quick === 'mine' && allocs[p.id]) || (quick === 'recent' && totals[p.id]) || (quick === 'client' && !p.client?.is_internal) || (quick === 'internal' && p.client?.is_internal))
+      .filter((p) => clientFilter === 'all' || p.client?.id === clientFilter)
       .sort((a, b) => (a.client?.is_internal - b.client?.is_internal) || (score(a) - score(b)) || a.name.localeCompare(b.name))
-  }, [projects, query, allocs, totals])
+  }, [projects, query, allocs, totals, quick, clientFilter])
+  // Group by client; internal last. Groups fold away (remembered per browser).
   const clientGroups = useMemo(() => {
-    const client = visibleProjects.filter((p) => !p.client?.is_internal)
-    const internal = visibleProjects.filter((p) => p.client?.is_internal)
-    return [{ label: 'Client projects', items: client }, { label: 'Internal', items: internal }].filter((g) => g.items.length)
+    const m = new Map()
+    visibleProjects.forEach((p) => {
+      const key = p.client?.id || 'none'
+      if (!m.has(key)) m.set(key, { id: key, label: p.client?.name || 'Other', internal: !!p.client?.is_internal, items: [] })
+      m.get(key).items.push(p)
+    })
+    return [...m.values()].sort((a, b) => (a.internal - b.internal) || a.label.localeCompare(b.label))
   }, [visibleProjects])
+  const filtering = quick !== 'all' || clientFilter !== 'all' || query.trim()
 
   // ---- entries
   const weekTotal = entries.reduce((a, e) => a + (e.hours || 0), 0)
@@ -139,11 +167,14 @@ export default function MyWeek() {
         <div className="row" style={{ gap: 12 }}>
           <h1>My week</h1>
           <Hint title="How this works" text="Drag a project from the left onto a day, or click it to add it to today. Pick how long, pick what kind of work, save. Do that until the ring on the right fills up and you're done for the week." />
-          <div className="row" style={{ gap: 2 }}>
-            <button className="btn sm ghost" aria-label="Previous week" onClick={() => nav(`/week/${addDays(ws, -7)}`)}><ChevronL /></button>
-            <span style={{ fontWeight: 600, padding: '0 6px' }}>{weekLabel(ws)}</span>
-            <button className="btn sm ghost" aria-label="Next week" onClick={() => nav(`/week/${addDays(ws, 7)}`)}><ChevronR /></button>
+          <div className="row" style={{ gap: 2, position: 'relative' }}>
+            <button className="btn sm ghost" aria-label="Previous week" title="Previous week (←)" onClick={() => nav(`/week/${addDays(ws, -7)}`)}><ChevronL /></button>
+            <button type="button" className="week-nav-btn" onClick={() => setPickerOpen((o) => !o)} aria-haspopup="dialog" aria-expanded={pickerOpen} title="Pick a week">
+              <Calendar width="15" height="15" style={{ color: 'var(--muted)' }} />{weekLabel(ws)}
+            </button>
+            <button className="btn sm ghost" aria-label="Next week" title="Next week (→)" onClick={() => nav(`/week/${addDays(ws, 7)}`)}><ChevronR /></button>
             {!isCurrentWeek && <button className="btn sm" onClick={() => nav('/')}>This week</button>}
+            {pickerOpen && <WeekPicker uid={user.id} weekStart={ws} dayHours={dayHours} onPick={(w) => nav(w === weekStart(today()) ? '/' : `/week/${w}`)} onClose={() => setPickerOpen(false)} />}
           </div>
         </div>
         <div className="row" style={{ gap: 10 }}>
@@ -158,14 +189,31 @@ export default function MyWeek() {
       <div className="week-layout">
         {/* Projects */}
         <aside className="week-side col" style={{ gap: 12 }}>
-          <div className="row between"><span className="row" style={{ gap: 6 }}><h2>My projects</h2><Hint title="My projects" text="Every live project you can log time to. Ones you've been allocated hours on come first, then ones you've used recently, then the rest. Internal work like pitches, admin and leave sits at the bottom. Can't see a project? Ask an admin to add it." /></span><span className="tiny muted">Drag onto a day</span></div>
+          <div className="row between"><span className="row" style={{ gap: 6 }}><h2>My projects</h2><Hint title="My projects" text="Every live project you can log time to, grouped by client. Mine shows only projects you've been allocated hours on, Recent shows ones you've logged against before, and the dropdown narrows to one client. Click a client name to fold its projects away. Can't see a project? Ask an admin to add it." /></span><span className="tiny muted">Drag onto a day</span></div>
           <label className="search"><Search style={{ color: 'var(--muted)' }} /><span className="sr">Search projects</span>
             <input type="search" placeholder="Search client or project…" value={query} onChange={(e) => setQuery(e.target.value)} />
           </label>
+          <div className="col" style={{ gap: 8 }}>
+            <div className="seg" role="tablist" aria-label="Filter projects">
+              {[['all', 'All'], ['mine', 'Mine'], ['recent', 'Recent'], ['client', 'Client'], ['internal', 'Internal']].map(([k, l]) => (
+                <button key={k} type="button" role="tab" aria-selected={quick === k} className={quick === k ? 'on' : ''} onClick={() => setQuick(k)}>{l}</button>
+              ))}
+            </div>
+            {clientOptions.length > 1 && (
+              <select className="select" style={{ height: 34, fontSize: 13 }} value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} aria-label="Filter by client">
+                <option value="all">All clients</option>
+                {clientOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+              </select>
+            )}
+          </div>
+          {!loading && filtering && visibleProjects.length === 0 && <div className="note info">Nothing matches. <button className="btn sm ghost" style={{ height: 24 }} onClick={() => { setQuery(''); setQuick('all'); setClientFilter('all') }}>Clear filters</button></div>}
           {clientGroups.map((g) => (
-            <div className="col" style={{ gap: 6 }} key={g.label}>
-              <div className="label" style={{ padding: '6px 4px 0' }}>{g.label}</div>
-              {g.items.map((p) => {
+            <div className="col" style={{ gap: 6 }} key={g.id}>
+              <button type="button" className="client-head" onClick={() => toggleClient(g.id)} aria-expanded={!collapsed[g.id]}>
+                <span className="label">{g.label}</span>
+                <span className="tiny muted row" style={{ gap: 4 }}>{g.items.length}<ChevronR width="11" height="11" style={{ transform: collapsed[g.id] ? 'none' : 'rotate(90deg)', transition: 'transform .15s' }} /></span>
+              </button>
+              {!collapsed[g.id] && g.items.map((p) => {
                 const alloc = allocs[p.id], used = totals[p.id] || 0
                 const pct = alloc ? Math.min(100, Math.round((used / alloc) * 100)) : 0
                 const overB = alloc && used > alloc
