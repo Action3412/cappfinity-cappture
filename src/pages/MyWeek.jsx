@@ -199,19 +199,25 @@ export default function MyWeek() {
             {days.map((d) => {
               const list = entries.filter((e) => e.entry_date === d)
               const tot = list.reduce((a, e) => a + (e.hours || 0), 0)
+              const pct = Math.min(100, Math.round((tot / dayHours) * 100))
+              const state = tot >= dayHours ? 'done' : d > t ? (tot > 0 ? 'part' : 'future') : tot > 0 ? 'part' : 'short'
+              const left = Math.max(0, dayHours - tot)
+              const status = state === 'done' ? 'Done' : state === 'part' ? `${fmtHours(left)} to go` : state === 'short' ? 'Nothing logged' : ''
               return (
-                <section key={d} className={`day ${d === t ? 'today' : ''} ${over === d ? 'over' : ''}`}
+                <section key={d} className={`day st-${state} ${d === t ? 'today' : ''} ${over === d ? 'over' : ''}`}
                   onDragOver={(ev) => { ev.preventDefault(); if (over !== d) setOver(d) }} onDragLeave={() => over === d && setOver(null)} onDrop={onDrop(d)}>
+                  <div className="day-progress" aria-hidden="true"><div style={{ width: `${pct}%` }} /></div>
                   <div className="row between" style={{ padding: '2px 6px' }}>
-                    <div className="row" style={{ gap: 6, alignItems: 'baseline' }}><b>{dayName(d)}</b><span className="small muted">{shortDate(d)}</span></div>
-                    <span className="small row" style={{ gap: 4, fontWeight: 600, color: tot >= dayHours ? 'var(--ok)' : tot > 0 ? 'var(--muted)' : '#B5B5BE' }}>{fmtHours(tot)}{d === days[0] && <Hint size={12} align="right" title="Day total" text={`Hours logged on this day. It goes green once you reach a full working day (${dayHours}h). You can log more than that if you really did work it.`} />}</span>
+                    <div className="row" style={{ gap: 6, alignItems: 'baseline' }}><b>{dayName(d)}</b><span className="small muted">{shortDate(d)}</span>{d === t && <span className="today-pip">Today</span>}</div>
+                    <span className="small row day-total" style={{ gap: 4, fontWeight: 600 }}>{state === 'done' && <Check width="13" height="13" />}{fmtHours(tot)}{d === days[0] && <Hint size={12} align="right" title="Day total" text={`Hours logged on this day. The column turns green once you reach a full working day (${dayHours}h), gold while it's part done, and pink if a day has passed with nothing or not enough on it. Future days stay grey.`} />}</span>
                   </div>
                   {list.map((e) => (
                     <EntryCard key={e.id} e={e} project={projById[e.project_id]} workType={wtById[e.work_type_id]} workTypes={workTypes} chunks={chunks}
                       onEdit={() => setEntries((es) => es.map((x) => ({ ...x, editing: x.id === e.id })))}
                       onChange={(f) => patch(e.id, f)} onSave={() => save(e)} onRemove={() => remove(e)} />
                   ))}
-                  {list.length === 0 && <div className="drop-hint"><Plus /> Drop a project here</div>}
+                  {status && list.length > 0 && <div className={`day-status`}>{status}</div>}
+                  {list.length === 0 && <div className="drop-hint"><Plus /> {state === 'short' ? 'Nothing logged yet' : 'Drop a project here'}</div>}
                 </section>
               )
             })}

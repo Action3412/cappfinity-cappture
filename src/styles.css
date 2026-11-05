@@ -100,9 +100,33 @@ h1 { font-size: 24px; } h2 { font-size: 15px; } h3 { font-size: 13px; }
 .days { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; align-items: start; }
 @media (max-width: 900px) { .days { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .days { grid-template-columns: 1fr; } }
-.day { display: flex; flex-direction: column; gap: 8px; min-height: 460px; padding: 10px; border-radius: 16px; background: #F9F9FB; border: 1.5px dashed var(--line); transition: background .15s, border-color .15s; }
-.day.today { background: #fff; border-color: #C9C9D2; }
-.day.over { background: #EEF3FF; border-color: var(--blue); }
+.day { position: relative; display: flex; flex-direction: column; gap: 8px; min-height: 460px; padding: 14px 10px 10px; border-radius: 16px; background: #F9F9FB; border: 1.5px solid var(--line); transition: background .2s, border-color .2s, box-shadow .2s; overflow: hidden; }
+.day-progress { position: absolute; top: 0; left: 0; right: 0; height: 4px; background: rgba(38,38,38,.06); }
+.day-progress > div { height: 100%; border-radius: 0 2px 2px 0; transition: width .4s ease; background: var(--line); }
+.day-total { color: #B5B5BE; }
+.day-status { align-self: center; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; margin-top: 2px; }
+.today-pip { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--blue); background: #EEF3FF; padding: 2px 6px; border-radius: 999px; }
+
+/* future: neutral */
+.day.st-future { border-style: dashed; }
+/* part done: gold */
+.day.st-part { background: #FFFBEE; border-color: #F3DFA0; }
+.day.st-part .day-progress > div { background: var(--gold); }
+.day.st-part .day-total { color: #8A6400; }
+.day.st-part .day-status { background: #FFF1C6; color: #6A4A00; }
+/* short: pink */
+.day.st-short { background: #FFF2FB; border-color: #F5C6EC; }
+.day.st-short .day-progress > div { background: var(--pink); }
+.day.st-short .day-total { color: #B0348F; }
+.day.st-short .drop-hint { color: #B0348F; }
+/* done: green with the spectrum line */
+.day.st-done { background: #F1FAF4; border-color: #BFE3CB; }
+.day.st-done .day-progress > div { background: var(--spectrum); }
+.day.st-done .day-total { color: var(--ok); }
+.day.st-done .day-status { background: #DDF3E5; color: var(--ok); }
+
+.day.today { box-shadow: 0 0 0 3px rgba(72,123,250,.12); border-color: #B9CBFB; }
+.day.over { background: #EEF3FF !important; border-color: var(--blue) !important; }
 .day.weekend-hide { display: none; }
 .entry { background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); }
 .entry.editing { border-color: var(--blue); }
