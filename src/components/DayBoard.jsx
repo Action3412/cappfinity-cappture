@@ -35,6 +35,30 @@ export function showGhost(target, hours) {
   target.track.appendChild(g)
 }
 
+/** Assign overlapping entries to side-by-side lanes (like a calendar). Returns { [id]: { lane, lanes } }. */
+export function layoutLanes(entries, dayStart) {
+  const items = entries.map((e) => ({ id: e.id, s: startOf(e, dayStart), e: startOf(e, dayStart) + e.hours })).sort((a, b) => a.s - b.s || b.e - a.e)
+  const out = {}
+  let cluster = [], clusterEnd = -1
+  const flush = () => {
+    if (!cluster.length) return
+    const laneEnds = []
+    cluster.forEach((it) => {
+      let lane = laneEnds.findIndex((end) => end <= it.s + 1e-9)
+      if (lane === -1) { lane = laneEnds.length; laneEnds.push(it.e) } else laneEnds[lane] = it.e
+      out[it.id] = { lane }
+    })
+    cluster.forEach((it) => { out[it.id].lanes = laneEnds.length })
+    cluster = []; clusterEnd = -1
+  }
+  items.forEach((it) => {
+    if (cluster.length && it.s >= clusterEnd - 1e-9) flush()
+    cluster.push(it); clusterEnd = Math.max(clusterEnd, it.e)
+  })
+  flush()
+  return out
+}
+
 export function startOf(e, fallback = 9) { const s = timeToHours(e.start_time); return s === null ? fallback : s }
 
 /** The visible clock range for a day: 9:00 to 17:30 by default, stretched to fit anything outside it. */
@@ -60,6 +84,7 @@ export function DayColumn({ date, entries, dayHours, dayStart, dayEnd, projById,
   const [from, to] = dayRange(entries, dayStart, dayEnd)
   const trackH = (to - from) * PX_PER_HOUR
   const hours = []; for (let h = Math.ceil(from); h <= Math.floor(to); h++) hours.push(h)
+  const lanes = layoutLanes(entries, dayStart)
 
 
   return (
@@ -87,7 +112,7 @@ export function DayColumn({ date, entries, dayHours, dayStart, dayEnd, projById,
         {isToday && now >= from && now <= to && <span className="now-line" style={{ top: (now - from) * PX_PER_HOUR }}><i /></span>}
 
         {entries.map((e) => (
-          <EntryBlock key={e.id} e={e} top={(startOf(e, dayStart) - from) * PX_PER_HOUR} project={projById[e.project_id]} workType={wtById[e.work_type_id]} editing={editingId === e.id}
+          <EntryBlock key={e.id} e={e} top={(startOf(e, dayStart) - from) * PX_PER_HOUR} lane={lanes[e.id]} project={projById[e.project_id]} workType={wtById[e.work_type_id]} editing={editingId === e.id}
             onOpen={onOpen} onResize={onResize} onMove={onMove} />
         ))}
       </div>
@@ -100,7 +125,7 @@ const status = (state, left) => state === 'done' ? 'Day complete' : state === 'p
 /* A block at a clock time. Drag to move (within or between days),     */
 /* pull either end to change the time, click to edit.                  */
 /* ------------------------------------------------------------------ */
-function EntryBlock({ e, top, project, workType, editing, onOpen, onResize, onMove }) {
+function EntryBlock({ e, top, lane, project, workType, editing, onOpen, onResize, onMove }) {
   const ref = useRef(null)
   const [preview, setPreview] = useState(null)   // { start, hours } while resizing
   const [drag, setDrag] = useState(null)         // { x, y, w, copy } while moving
@@ -159,12 +184,16 @@ function EntryBlock({ e, top, project, workType, editing, onOpen, onResize, onMo
     if (g.target) onMove(e, g.target.date, g.target.start, g.copy)
   }
 
+  // Side-by-side lanes when blocks overlap: split the usable width (track minus the 30px time gutter), small gutter between.
+  const laneStyle = lane && lane.lanes > 1
+    ? { left: `calc(30px + (100% - 33px) * ${lane.lane / lane.lanes})`, right: 'auto', width: `calc((100% - 33px) / ${lane.lanes} - 3px)` }
+    : {}
   const style = drag
     ? { position: 'fixed', top: drag.y, left: drag.x, width: drag.w, height: h, right: 'auto', zIndex: 1000, transform: 'scale(1.02)' }
-    : { top: preview ? (top + (preview.start - startOf(e)) * PX_PER_HOUR) : top, height: h, zIndex: editing ? 5 : preview ? 6 : undefined }
+    : { top: preview ? (top + (preview.start - startOf(e)) * PX_PER_HOUR) : top, height: h, zIndex: editing ? 5 : preview ? 6 : undefined, ...laneStyle }
 
   return (
-    <article ref={ref} data-entry={e.id} className={`block ${drag ? 'lifted' : ''} ${preview ? 'resizing' : ''} ${editing ? 'editing' : ''} ${compact ? 'compact' : ''} ${tiny ? 'tiny' : ''}`} style={style}
+    <article ref={ref} data-entry={e.id} className={`block ${lane && lane.lanes > 1 ? 'overlap' : ''} ${drag ? 'lifted' : ''} ${preview ? 'resizing' : ''} ${editing ? 'editing' : ''} ${compact ? 'compact' : ''} ${tiny ? 'tiny' : ''}`} style={style}
       onPointerDown={(ev) => down(ev, 'move')} role="button" tabIndex={0}
       aria-label={`${project.name}, ${fmtClock(start)} to ${fmtClock(start + hours)}, ${fmtHours(hours)}. Press Enter to edit.`}
       onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onOpen(e, ref.current) } }}>
