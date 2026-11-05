@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth.jsx'
 import { supabase } from '../lib/supabase.js'
@@ -8,7 +8,7 @@ import Ring from '../components/Ring.jsx'
 import { ChevronL, ChevronR, Repeat, Search, Plus, Pencil, Calendar, Check, Info } from '../components/Icons.jsx'
 import Hint from '../components/Hint.jsx'
 import WeekPicker from '../components/WeekPicker.jsx'
-import { DayColumn, EntryPopover, startOf } from '../components/DayBoard.jsx'
+import { DayColumn, EntryPopover, startOf, boardTargetAt, showGhost } from '../components/DayBoard.jsx'
 
 const DEFAULT_CHUNKS = [
   { label: '30m', hours: 0.5 }, { label: '1h', hours: 1 }, { label: '2h', hours: 2 },
@@ -114,13 +114,25 @@ export default function MyWeek() {
     for (const [s0, e0] of list) { if (e0 <= t) continue; if (s0 >= t + len) break; t = e0 }
     return Math.round(t * 4) / 4
   }
+  // Put a new block exactly where it was dropped. If that's inside another block, go straight after it.
+  // If the gap is shorter than `len`, shrink to fit (down to 15 minutes).
+  function placeAt(date, at, len = 1) {
+    const list = entries.filter((x) => x.entry_date === date).map((x) => [startOf(x, dayStart), startOf(x, dayStart) + x.hours]).sort((a, b) => a[0] - b[0])
+    const inside = list.find(([s0, e0]) => at >= s0 && at < e0)
+    let start = inside ? inside[1] : at
+    const next = list.find(([s0]) => s0 >= start + 0.01)
+    let hours = len
+    if (next && next[0] < start + len) hours = Math.max(0.25, Math.round((next[0] - start) * 4) / 4)
+    if (next && next[0] - start < 0.25) { start = nextFree(date, start, len); hours = len }
+    return { start, hours }
+  }
   // Dropping a project creates a one-hour block at that time (or the next gap), then opens the editor on it.
   async function addEntry(projectId, date, at = null, anchorAfter = true) {
     if (!projById[projectId]) return
     setDragging(null); setOver(null)
-    const startT = nextFree(date, at ?? dayStart, 1)
+    const { start: startT, hours: len } = at === null ? { start: nextFree(date, dayStart, 1), hours: 1 } : placeAt(date, at, 1)
     try {
-      const row = await insertEntry({ profile_id: user.id, project_id: projectId, work_type_id: null, entry_date: date, hours: 1, note: null, source: 'manual', start_time: hoursToTime(startT) })
+      const row = await insertEntry({ profile_id: user.id, project_id: projectId, work_type_id: null, entry_date: date, hours: len, note: null, source: 'manual', start_time: hoursToTime(startT) })
       const e = { ...row, hours: Number(row.hours) }
       setEntries((es) => [...es, e])
       refreshTotals()
@@ -152,6 +164,20 @@ export default function MyWeek() {
     }
     await commit(e, { entry_date: date, start_time: hoursToTime(startT) })
   }
+  // Cut a block in two, back to back. The second half gets no work type yet and opens for editing.
+  async function splitEntry(e) {
+    const half = Math.max(0.25, Math.round((e.hours / 2) * 4) / 4)
+    const rest = Math.round((e.hours - half) * 4) / 4
+    if (rest < 0.25) { flash('Too short to split'); return }
+    const start = startOf(e, dayStart)
+    try {
+      await commit(e, { hours: half })
+      const row = await insertEntry({ profile_id: user.id, project_id: e.project_id, work_type_id: null, entry_date: e.entry_date, hours: rest, note: null, source: 'manual', start_time: hoursToTime(start + half) })
+      const n = { ...row, hours: Number(row.hours) }
+      setEntries((es) => [...es, n])
+      setTimeout(() => setEditing({ id: n.id, anchor: document.querySelector(`[data-entry="${n.id}"]`) }), 30)
+    } catch (ex) { flash(ex.message) }
+  }
   async function remove(e) {
     setEditing(null)
     setEntries((es) => es.filter((x) => x.id !== e.id))
@@ -178,9 +204,34 @@ export default function MyWeek() {
     setSuggestions((x) => x.filter((y) => y.id !== s.id))
   }
 
-  // ---- drag & drop
-  const onDragStart = (p) => (ev) => { ev.dataTransfer.setData('text/plain', p.id); ev.dataTransfer.effectAllowed = 'copy'; setDragging(p.id) }
-  const onDropProject = (ev, date, at) => { const id = ev.dataTransfer.getData('text/plain') || dragging; if (id) addEntry(id, date, at) }
+  // ---- dragging a project from the list onto the board (pointer based, with a live ghost at the time under the cursor)
+  const projDrag = useRef(null)
+  function projDown(p) {
+    return (ev) => {
+      if (ev.button !== 0) return
+      const g = { p, x0: ev.clientX, y0: ev.clientY, moved: false, target: null, chip: null }
+      projDrag.current = g
+      const move = (e2) => {
+        if (!g.moved && Math.hypot(e2.clientX - g.x0, e2.clientY - g.y0) < 6) return
+        if (!g.moved) {
+          g.moved = true; document.body.classList.add('dragging')
+          g.chip = document.createElement('div'); g.chip.className = 'drag-chip'
+          g.chip.innerHTML = `<span class="swatch" style="background:${p.colour}"></span><b>${p.name}</b><span class="tiny muted">1h</span>`
+          document.body.appendChild(g.chip)
+        }
+        g.chip.style.left = `${e2.clientX + 14}px`; g.chip.style.top = `${e2.clientY + 10}px`
+        g.target = boardTargetAt(e2.clientX, e2.clientY)
+        showGhost(g.target, 1)
+      }
+      const up = () => {
+        window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up)
+        document.body.classList.remove('dragging'); showGhost(null); g.chip?.remove(); projDrag.current = null
+        if (!g.moved) { addEntry(p.id, quickAddDate, null); return }
+        if (g.target) addEntry(p.id, g.target.date, g.target.start)
+      }
+      window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up)
+    }
+  }
   const quickAddDate = days.includes(today()) ? today() : days[0]
 
   const t = today()
@@ -244,8 +295,7 @@ export default function MyWeek() {
                 const pct = alloc ? Math.min(100, Math.round((used / alloc) * 100)) : 0
                 const overB = alloc && used > alloc
                 return (
-                  <div key={p.id} className="proj" draggable onDragStart={onDragStart(p)} onDragEnd={() => { setDragging(null); setOver(null) }}
-                    onClick={() => addEntry(p.id, quickAddDate, null)} title={`Drag onto a day, or click to add to ${dayName(quickAddDate)}`}>
+                  <div key={p.id} className="proj" onPointerDown={projDown(p)} title={`Drag onto a day at the time you started, or click to add to ${dayName(quickAddDate)}`}>
                     <div className="row" style={{ gap: 10 }}>
                       <span className="swatch" style={{ background: p.colour }} />
                       <div className="col" style={{ gap: 0, minWidth: 0, flex: 1 }}>
@@ -274,7 +324,6 @@ export default function MyWeek() {
             {days.map((d) => (
               <DayColumn key={d} date={d} entries={entries.filter((e) => e.entry_date === d)} dayHours={dayHours} dayStart={dayStart} dayEnd={dayEnd} projById={projById} wtById={wtById}
                 isToday={d === t} isFirst={d === days[0]} editingId={editing?.id}
-                onDropProject={onDropProject}
                 onOpen={(e, el) => setEditing({ id: e.id, anchor: el })}
                 onResize={(e, h, startT) => commit(e, { hours: h, start_time: hoursToTime(startT) })}
                 onMove={(e, date, startT, copy) => moveEntry(e, date, startT, copy)} />
@@ -282,7 +331,7 @@ export default function MyWeek() {
           </div>
           {editingEntry && (
             <EntryPopover e={editingEntry} anchor={editing.anchor} project={projById[editingEntry.project_id]} workTypes={workTypes} chunks={chunks} days={days}
-              onChange={(f) => commit(editingEntry, f)} onRemove={remove} onCopy={(e, date) => moveEntry(e, date, date === e.entry_date ? null : startOf(e, dayStart), true)} onClose={() => setEditing(null)} />
+              onChange={(f) => commit(editingEntry, f)} onRemove={remove} onCopy={(e, date) => moveEntry(e, date, date === e.entry_date ? null : startOf(e, dayStart), true)} onSplit={splitEntry} onClose={() => setEditing(null)} />
           )}
         </main>
 

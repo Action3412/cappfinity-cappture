@@ -290,3 +290,5 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none 
 .day-status { align-self: flex-start; margin: 0 6px 2px; }
 .day-status.part { background: #FFF1C6; color: #6A4A00; } .day-status.short { background: #FDE1F5; color: #B0348F; } .day-status.done { background: #DDF3E5; color: var(--ok); }
 .track-free { display: none; }
+.drag-chip { position: fixed; z-index: 1000; pointer-events: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; background: #fff; border: 1px solid var(--line); box-shadow: 0 12px 30px rgba(38,38,38,.2); font-size: 13px; white-space: nowrap; }
+.proj { touch-action: pan-y; }

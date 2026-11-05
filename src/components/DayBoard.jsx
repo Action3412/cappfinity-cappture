@@ -8,6 +8,32 @@ const MIN_H = 0.25
 const snapH = (h) => Math.max(MIN_H, Math.round(h * 4) / 4)
 const snapT = (t) => Math.round(t * 4) / 4
 
+/** Where a pointer is over the board: the day, its clock range and the snapped time under the pointer. */
+export function boardTargetAt(x, y, grabOffsetPx = 0, skipEl = null) {
+  const stack = document.elementsFromPoint(x, y)
+  for (const el of stack) {
+    if (skipEl && skipEl.contains(el)) continue
+    const day = el.closest?.('[data-day]')
+    if (day) {
+      const track = day.querySelector('.track'), r = track.getBoundingClientRect()
+      const from = Number(day.getAttribute('data-from'))
+      const start = Math.max(0, snapT(from + (y - grabOffsetPx - r.top) / PX_PER_HOUR))
+      return { date: day.getAttribute('data-day'), start, track, from, dayEl: day }
+    }
+  }
+  return null
+}
+export function showGhost(target, hours) {
+  document.querySelectorAll('.ghost-block').forEach((n) => n.remove())
+  document.querySelectorAll('.day.drop-target').forEach((n) => n.classList.remove('drop-target'))
+  if (!target) return
+  target.dayEl.classList.add('drop-target')
+  const g = document.createElement('div'); g.className = 'ghost-block'
+  g.style.top = `${(target.start - target.from) * PX_PER_HOUR}px`; g.style.height = `${Math.max(22, hours * PX_PER_HOUR - 3)}px`
+  g.innerHTML = `<span>${fmtClock(target.start)} – ${fmtClock(target.start + hours)}</span>`
+  target.track.appendChild(g)
+}
+
 export function startOf(e, fallback = 9) { const s = timeToHours(e.start_time); return s === null ? fallback : s }
 
 /** The visible clock range for a day: 9:00 to 17:30 by default, stretched to fit anything outside it. */
@@ -34,16 +60,9 @@ export function DayColumn({ date, entries, dayHours, dayStart, dayEnd, projById,
   const trackH = (to - from) * PX_PER_HOUR
   const hours = []; for (let h = Math.ceil(from); h <= Math.floor(to); h++) hours.push(h)
 
-  function yToTime(clientY) {
-    const r = trackRef.current.getBoundingClientRect()
-    return snapT(from + (clientY - r.top) / PX_PER_HOUR)
-  }
 
   return (
-    <section className={`day st-${state} ${isToday ? 'today' : ''}`} data-day={date} data-from={from}
-      onDragOver={(ev) => { ev.preventDefault(); ev.currentTarget.classList.add('drop-target') }}
-      onDragLeave={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget)) ev.currentTarget.classList.remove('drop-target') }}
-      onDrop={(ev) => { ev.preventDefault(); ev.currentTarget.classList.remove('drop-target'); onDropProject(ev, date, Math.max(from, Math.min(to - 1, yToTime(ev.clientY)))) }}>
+    <section className={`day st-${state} ${isToday ? 'today' : ''}`} data-day={date} data-from={from}>
       <div className="day-progress" aria-hidden="true"><div style={{ width: `${pct}%` }} /></div>
       <div className="row between" style={{ padding: '2px 6px 4px' }}>
         <div className="row" style={{ gap: 6, alignItems: 'baseline' }}><b>{dayName(date)}</b><span className="small muted">{shortDate(date)}</span>{isToday && <span className="today-pip">Today</span>}</div>
@@ -90,31 +109,6 @@ function EntryBlock({ e, top, project, workType, editing, onOpen, onResize, onMo
   const h = Math.max(22, hours * PX_PER_HOUR - 3)
   const compact = h < 46, tiny = h < 30
 
-  function targetAt(x, y) {
-    const stack = document.elementsFromPoint(x, y)
-    for (const el of stack) {
-      if (ref.current && ref.current.contains(el)) continue
-      const day = el.closest?.('[data-day]')
-      if (day) {
-        const track = day.querySelector('.track'), r = track.getBoundingClientRect()
-        const from = Number(day.getAttribute('data-from'))
-        const g = gesture.current
-        const startT = snapT(from + (y - g.grabY - r.top) / PX_PER_HOUR)
-        return { date: day.getAttribute('data-day'), start: Math.max(0, startT), track, from, dayEl: day }
-      }
-    }
-    return null
-  }
-  function showGhost(target) {
-    document.querySelectorAll('.ghost-block').forEach((n) => n.remove())
-    document.querySelectorAll('.day.drop-target').forEach((n) => n.classList.remove('drop-target'))
-    if (!target) return
-    target.dayEl.classList.add('drop-target')
-    const g = document.createElement('div'); g.className = 'ghost-block'
-    g.style.top = `${(target.start - target.from) * PX_PER_HOUR}px`; g.style.height = `${h}px`
-    g.innerHTML = `<span>${fmtClock(target.start)} – ${fmtClock(target.start + hours)}</span>`
-    target.track.appendChild(g)
-  }
   function endGesture() {
     gesture.current = null
     window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up)
@@ -140,8 +134,8 @@ function EntryBlock({ e, top, project, workType, editing, onOpen, onResize, onMo
     if (!g.moved && Math.hypot(dx, dy) < 6) return
     if (!g.moved) document.body.classList.add('dragging')
     g.moved = true; g.copy = ev.altKey
-    g.target = targetAt(ev.clientX, ev.clientY)
-    showGhost(g.target)
+    g.target = boardTargetAt(ev.clientX, ev.clientY, g.grabY, ref.current)
+    showGhost(g.target, hours)
     setDrag({ x: g.rect.x + dx, y: g.rect.y + dy, w: g.rect.w, copy: g.copy })
   }
   function up(ev) {
@@ -187,7 +181,7 @@ function EntryBlock({ e, top, project, workType, editing, onOpen, onResize, onMo
 /* ------------------------------------------------------------------ */
 /* Floating editor next to a block.                                    */
 /* ------------------------------------------------------------------ */
-export function EntryPopover({ e, anchor, project, workTypes, chunks, days, onChange, onRemove, onCopy, onClose }) {
+export function EntryPopover({ e, anchor, project, workTypes, chunks, days, onChange, onRemove, onCopy, onSplit, onClose }) {
   const ref = useRef(null)
   const [pos, setPos] = useState({ top: 0, left: 0, side: 'right' })
   const [note, setNote] = useState(e.note || '')
@@ -268,7 +262,10 @@ export function EntryPopover({ e, anchor, project, workTypes, chunks, days, onCh
       </div>
 
       <div className="row between" style={{ marginTop: 14 }}>
-        <button className="btn sm ghost danger" onClick={() => onRemove(e)}>Remove</button>
+        <div className="row" style={{ gap: 4 }}>
+          <button className="btn sm ghost danger" onClick={() => onRemove(e)}>Remove</button>
+          {e.hours >= 0.5 && <span className="row" style={{ gap: 4 }}><button className="btn sm ghost" onClick={() => onSplit(e)}>Split</button><Hint size={12} title="Split" text="Cuts this block into two back to back, so you can give each half its own work type (say QA then Analysis). Drag the join between them to wherever you actually switched." /></span>}
+        </div>
         <button className="btn sm primary" onClick={() => { saveNote(); onClose() }}>Done</button>
       </div>
     </div>
