@@ -58,6 +58,10 @@ function Projects() {
   const [showArchived, setShowArchived] = useState(false)
   const [form, setForm] = useState({ client: '', name: '', code: '', budget: '', billable: true })
   const [allocFor, setAllocFor] = useState(null)
+  const [editing, setEditing] = useState(null)
+  const [q, setQ] = useState('')
+  const [fClient, setFClient] = useState('all')
+  const [fBill, setFBill] = useState('all')
   const [toast, flash] = useToast()
 
   async function load() {
@@ -98,7 +102,28 @@ function Projects() {
     if (error) flash(error.message); else setProjects((ps) => ps.map((x) => (x.id === p.id ? { ...x, budget_hours: Number(v) || 0 } : x)))
   }
 
-  const list = projects.filter((p) => showArchived || p.status === 'active')
+  const list = projects
+    .filter((p) => showArchived || p.status === 'active')
+    .filter((p) => fClient === 'all' || p.client_id === fClient)
+    .filter((p) => fBill === 'all' || (fBill === 'yes') === !!p.billable)
+    .filter((p) => !q.trim() || `${p.name} ${p.code} ${p.client?.name}`.toLowerCase().includes(q.trim().toLowerCase()))
+  const filtering = q.trim() || fClient !== 'all' || fBill !== 'all'
+  async function saveEdit(p, fields) {
+    const patch = { ...fields }
+    if (fields.clientName !== undefined) {
+      const name = fields.clientName.trim(); delete patch.clientName
+      let client = clients.find((c) => c.name.toLowerCase() === name.toLowerCase())
+      if (!client && name) {
+        const { data, error } = await supabase.from('clients').insert({ name, colour: COLOURS[clients.length % COLOURS.length] }).select().single()
+        if (error) { flash(error.message); return false }
+        client = data
+      }
+      if (client) patch.client_id = client.id
+    }
+    const { error } = await supabase.from('projects').update(patch).eq('id', p.id)
+    if (error) { flash(error.code === '23505' ? 'That code is already in use' : error.message); return false }
+    flash('Saved'); load(); return true
+  }
   const autoCode = form.client && form.name ? suggestCode(form.client, form.name) : ''
 
   return (
@@ -120,7 +145,16 @@ function Projects() {
       </section>
 
       <section className="panel" style={{ overflow: 'hidden' }}>
-        <div className="panel-h"><h2>Client projects</h2><label className="checkbox small"><input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Show archived</label></div>
+        <div className="panel-h" style={{ flexWrap: 'wrap', gap: 10 }}>
+          <h2>Client projects <span className="small muted" style={{ fontWeight: 500 }}>{list.length}{filtering ? ` of ${projects.filter((p) => showArchived || p.status === 'active').length}` : ''}</span></h2>
+          <div className="row wrap" style={{ gap: 8 }}>
+            <input className="input" placeholder="Search name, code or client…" value={q} onChange={(e) => setQ(e.target.value)} style={{ height: 34, width: 220 }} aria-label="Search projects" />
+            <select className="select" style={{ height: 34, width: 'auto' }} value={fClient} onChange={(e) => setFClient(e.target.value)} aria-label="Filter by client"><option value="all">All clients</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+            <select className="select" style={{ height: 34, width: 'auto' }} value={fBill} onChange={(e) => setFBill(e.target.value)} aria-label="Filter by billable"><option value="all">Billable and non-billable</option><option value="yes">Billable only</option><option value="no">Non-billable only</option></select>
+            <label className="checkbox small"><input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Show archived</label>
+            {filtering && <button className="btn sm ghost" onClick={() => { setQ(''); setFClient('all'); setFBill('all') }}>Clear</button>}
+          </div>
+        </div>
         <div className="scroll-x">
           <table className="tbl" style={{ minWidth: 760 }}>
             <thead><tr><th>Client</th><th>Project</th><th>Code</th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Budget<Hint align="right" title="Budget" text="Total hours for the project. Edit it here and it saves when you click away." /></span></th><th className="num"><span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>Allocated<Hint align="right" title="Allocated" text="Who's on the project, set with the Team button, and the hours you expect from them if you've given any. Anyone can still log time whether or not they're on it; being on it just puts the project at the top of their list, and an hours estimate gives them a little budget bar to track against." /></span></th><th><span className="row" style={{ gap: 4 }}>Status<Hint title="Status" text="Archiving takes a project off everyone's list so no more time can be logged to it, but keeps every hour already logged in reports and exports. Restore brings it back." /></span></th><th /></tr></thead>
@@ -128,29 +162,69 @@ function Projects() {
               {list.map((p) => {
                 const al = allocByProject[p.id] || []
                 return (
-                  <tr key={p.id} style={{ opacity: p.status === 'archived' ? .55 : 1 }}>
+                  <tr key={p.id} className="click" style={{ opacity: p.status === 'archived' ? .55 : 1 }} onClick={() => setEditing(p)} title="Click to edit">
                     <td><div className="row"><span className="swatch" style={{ background: p.colour || p.client?.colour }} /><b>{p.client?.name}</b></div></td>
                     <td>{p.name}{!p.billable && <span className="tag grey" style={{ marginLeft: 8 }}>non-billable</span>}</td>
                     <td className="small muted">{p.code}</td>
-                    <td className="num"><input className="input" type="number" min="0" step="0.5" defaultValue={p.budget_hours} onBlur={(e) => Number(e.target.value) !== Number(p.budget_hours) && updateBudget(p, e.target.value)} style={{ width: 84, height: 32, textAlign: 'right' }} aria-label="Budget hours" /></td>
+                    <td className="num" onClick={(e) => e.stopPropagation()}><input className="input" type="number" min="0" step="0.5" defaultValue={p.budget_hours} onBlur={(e) => Number(e.target.value) !== Number(p.budget_hours) && updateBudget(p, e.target.value)} style={{ width: 84, height: 32, textAlign: 'right' }} aria-label="Budget hours" /></td>
                     <td className="num">{al.length ? `${al.length} ${al.length === 1 ? 'person' : 'people'}${al.some((x) => x.hours) ? ` · ${al.reduce((a, x) => a + (Number(x.hours) || 0), 0)}h` : ''}` : <span className="muted">nobody yet</span>}</td>
                     <td><span className={`tag ${p.status === 'active' ? 'ok' : 'grey'}`}>{p.status === 'active' ? 'Active' : 'Archived'}</span></td>
-                    <td className="num"><div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+                    <td className="num" onClick={(e) => e.stopPropagation()}><div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+                      <button className="btn sm" onClick={() => setEditing(p)}>Edit</button>
                       <button className="btn sm" onClick={() => setAllocFor(p)}>Team</button>
                       <button className="btn sm" onClick={() => toggleArchive(p)}>{p.status === 'active' ? 'Archive' : 'Restore'}</button>
                     </div></td>
                   </tr>
                 )
               })}
-              {!list.length && <tr><td colSpan="7" className="center">No projects yet. Add the first one above.</td></tr>}
+              {!list.length && <tr><td colSpan="7" className="center">{filtering ? 'Nothing matches those filters.' : 'No projects yet. Add the first one above.'}</td></tr>}
             </tbody>
           </table>
         </div>
       </section>
 
+      {editing && <EditProjectModal project={editing} clients={clients} onSave={(fields) => saveEdit(editing, fields)} onClose={() => setEditing(null)} />}
       {allocFor && <AllocateModal project={allocFor} people={people} allocs={allocByProject[allocFor.id] || []} onClose={() => { setAllocFor(null); load() }} flash={flash} />}
       {toast && <div className="toast">{toast}</div>}
     </>
+  )
+}
+
+function EditProjectModal({ project, clients, onSave, onClose }) {
+  const [f, setF] = useState({ clientName: project.client?.name || '', name: project.name, code: project.code, budget_hours: project.budget_hours, billable: project.billable, colour: project.colour || '' })
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { const k = (e) => e.key === 'Escape' && onClose(); document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k) }, [onClose])
+  async function submit(e) {
+    e.preventDefault(); setBusy(true)
+    const ok = await onSave({ clientName: f.clientName, name: f.name.trim(), code: f.code.trim().toUpperCase(), budget_hours: Number(f.budget_hours) || 0, billable: f.billable, colour: f.colour || null })
+    setBusy(false); if (ok) onClose()
+  }
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(38,38,38,.45)', display: 'grid', placeItems: 'center', zIndex: 40, padding: 20 }} onClick={onClose}>
+      <form className="panel col" style={{ width: '100%', maxWidth: 560, gap: 0 }} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
+        <div className="panel-h"><h2>Edit project</h2><button type="button" className="icon-btn" aria-label="Close" onClick={onClose}><X /></button></div>
+        <div className="panel-b col" style={{ gap: 12 }}>
+          <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+            <label className="field">Client
+              <input className="input" list="edit-clients" value={f.clientName} onChange={(e) => setF({ ...f, clientName: e.target.value })} required />
+              <datalist id="edit-clients">{clients.map((c) => <option key={c.id} value={c.name} />)}</datalist>
+            </label>
+            <label className="field">Project name<input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required /></label>
+            <label className="field">Code<input className="input" value={f.code} onChange={(e) => setF({ ...f, code: e.target.value.toUpperCase() })} required style={{ textTransform: 'uppercase' }} /></label>
+            <label className="field">Budget (hours)<input className="input" type="number" min="0" step="0.5" value={f.budget_hours} onChange={(e) => setF({ ...f, budget_hours: e.target.value })} /></label>
+            <label className="field">Billable<select className="select" value={f.billable ? 'yes' : 'no'} onChange={(e) => setF({ ...f, billable: e.target.value === 'yes' })}><option value="yes">Billable</option><option value="no">Non-billable</option></select></label>
+            <label className="field">Colour on the board
+              <div className="row wrap" style={{ gap: 6, paddingTop: 4 }}>
+                <button type="button" className={`pill ${!f.colour ? 'on' : ''}`} onClick={() => setF({ ...f, colour: '' })} title="Use the client's colour">Client's</button>
+                {COLOURS.map((c) => <button type="button" key={c} aria-label={`Colour ${c}`} onClick={() => setF({ ...f, colour: c })} style={{ width: 26, height: 26, borderRadius: 8, border: f.colour === c ? '2px solid var(--charcoal)' : '2px solid transparent', background: c, cursor: 'pointer' }} />)}
+              </div>
+            </label>
+          </div>
+          <span className="small muted">Changing the client moves the project under that client; typing a new client name creates it. Changing the code is safe, every hour already logged stays attached.</span>
+        </div>
+        <div className="row between" style={{ padding: '12px 18px', borderTop: '1px solid var(--line-soft)' }}><button type="button" className="btn" onClick={onClose}>Cancel</button><button type="submit" className="btn primary" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button></div>
+      </form>
+    </div>
   )
 }
 
