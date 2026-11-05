@@ -71,7 +71,7 @@ export function dayRange(entries, dayStart, dayEnd) {
 /* ------------------------------------------------------------------ */
 /* One day column: a clock track. Blocks sit at the time they happened. */
 /* ------------------------------------------------------------------ */
-export function DayColumn({ date, entries, dayHours, dayStart, dayEnd, projById, wtById, isToday, isFirst, editingId, onDropProject, onOpen, onResize, onMove }) {
+export function DayColumn({ date, entries, dayHours, dayStart, dayEnd, range, projById, wtById, isToday, isFirst, editingId, onDropProject, onOpen, onResize, onMove }) {
   const t = today()
   const trackRef = useRef(null)
   const [now, setNow] = useState(() => { const d = new Date(); return d.getHours() + d.getMinutes() / 60 })
@@ -81,7 +81,7 @@ export function DayColumn({ date, entries, dayHours, dayStart, dayEnd, projById,
   const pct = Math.min(100, Math.round((tot / dayHours) * 100))
   const state = tot >= dayHours ? 'done' : date > t ? (tot > 0 ? 'part' : 'future') : tot > 0 ? 'part' : 'short'
   const left = Math.max(0, dayHours - tot)
-  const [from, to] = dayRange(entries, dayStart, dayEnd)
+  const [from, to] = range || dayRange(entries, dayStart, dayEnd)
   const trackH = (to - from) * PX_PER_HOUR
   const hours = []; for (let h = Math.ceil(from); h <= Math.floor(to); h++) hours.push(h)
   const lanes = layoutLanes(entries, dayStart)
@@ -104,11 +104,11 @@ export function DayColumn({ date, entries, dayHours, dayStart, dayEnd, projById,
 
       <div className="track" ref={trackRef} style={{ height: trackH }}>
         {hours.map((h) => (
-          <span key={h} className={`hour-line ${h === 12 || h === 13 ? 'noon' : ''}`} style={{ top: (h - from) * PX_PER_HOUR }}><i>{fmtClock(h)}</i></span>
+          <span key={h} className={`hour-line ${h === 12 || h === 13 ? 'noon' : ''}`} style={{ top: (h - from) * PX_PER_HOUR }}>{!range && <i>{fmtClock(h)}</i>}</span>
         ))}
         {hours.map((h) => h + 0.5 <= to && <span key={h + 'h'} className="half-line" style={{ top: (h + 0.5 - from) * PX_PER_HOUR }} />)}
-        {dayStart > from && <span className="edge-line" style={{ top: (dayStart - from) * PX_PER_HOUR }}><i>start</i></span>}
-        <span className="edge-line" style={{ top: (dayEnd - from) * PX_PER_HOUR }}><i>{fmtClock(dayEnd)}</i></span>
+        {dayStart > from && <span className="edge-line" style={{ top: (dayStart - from) * PX_PER_HOUR }}>{!range && <i>start</i>}</span>}
+        <span className="edge-line" style={{ top: (dayEnd - from) * PX_PER_HOUR }}>{!range && <i>{fmtClock(dayEnd)}</i>}</span>
         {isToday && now >= from && now <= to && <span className="now-line" style={{ top: (now - from) * PX_PER_HOUR }}><i /></span>}
 
         {entries.map((e) => (
@@ -119,6 +119,20 @@ export function DayColumn({ date, entries, dayHours, dayStart, dayEnd, projById,
     </section>
   )
 }
+/** The shared clock down the left of the board. */
+export function TimeGutter({ from, to, dayStart, dayEnd }) {
+  const hours = []; for (let h = Math.ceil(from); h <= Math.floor(to); h++) hours.push(h)
+  return (
+    <div className="gutter" aria-hidden="true">
+      <div className="gutter-head" />
+      <div className="track" style={{ height: (to - from) * PX_PER_HOUR }}>
+        {hours.map((h) => <span key={h} className="gutter-label" style={{ top: (h - from) * PX_PER_HOUR }}>{fmtClock(h)}</span>)}
+        <span className="gutter-label edge" style={{ top: (dayEnd - from) * PX_PER_HOUR }}>{fmtClock(dayEnd)}</span>
+      </div>
+    </div>
+  )
+}
+
 const status = (state, left) => state === 'done' ? 'Day complete' : state === 'part' ? `${fmtHours(left)} to go` : state === 'short' ? 'Nothing logged yet' : ''
 
 /* ------------------------------------------------------------------ */

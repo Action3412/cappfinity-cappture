@@ -391,3 +391,66 @@ h1 + .hint { margin-left: 2px; }
 .block.overlap { box-shadow: 0 1px 2px rgba(38,38,38,.06), 0 0 0 1px #fff; }
 .block.overlap .block-title { font-size: 12px; }
 .block.overlap::after { content: ""; position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 2px #fff; }
+
+/* ======================= My week: one board ======================= */
+.page { padding: 22px 28px 48px; }
+.week-layout { gap: 18px; align-items: stretch; }
+.week-side { flex: 0 1 290px; min-width: 250px; }
+.week-right { flex: 0 1 290px; }
+
+/* Left: projects as one card */
+.side-panel { padding: 16px 14px 10px; display: flex; flex-direction: column; gap: 12px; border-radius: 20px; align-self: flex-start; }
+.side-panel .search { border-radius: 12px; background: var(--bg); border-color: transparent; }
+.side-panel .seg { width: 100%; justify-content: space-between; }
+.side-panel .seg button { flex: 1; padding: 0 6px; }
+.proj-list { display: flex; flex-direction: column; gap: 0; margin: 0 -6px; max-height: calc(100vh - 330px); overflow: auto; padding: 0 6px 4px; }
+.proj-list .col { gap: 0; }
+.client-head { padding: 12px 8px 4px; position: sticky; top: 0; background: #fff; z-index: 2; }
+.client-head .label { font-size: 10.5px; }
+.proj { border: 0; border-radius: 12px; background: transparent; padding: 9px 8px; gap: 7px; }
+.proj + .proj { border-top: 1px dotted var(--line-soft); border-radius: 0 0 12px 12px; }
+.proj:hover { background: var(--bg); border-color: transparent; }
+.proj .name { font-size: 13px; }
+.proj .tiny.muted { font-size: 11px; }
+
+/* The board */
+.board { display: grid; grid-template-columns: 46px repeat(5, minmax(0, 1fr)); background: #fff; border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 1px 2px rgba(38,38,38,.04), 0 14px 44px rgba(38,38,38,.07); overflow: hidden; }
+@media (max-width: 900px) { .board { grid-template-columns: 1fr; } .gutter { display: none; } }
+.board .day { min-height: 0; padding: 0 8px 12px; border: 0; border-left: 1px solid var(--line-soft); border-radius: 0; background: #fff; box-shadow: none; position: relative; }
+.board .day:nth-child(2) { border-left: 0; }
+.board .day-progress { display: none; }
+.board .day > .row.between { height: 56px; padding: 10px 8px 0; box-sizing: border-box; align-items: flex-start; }
+.board .day > .row.between b { font-size: 15px; }
+.board .day-status { position: absolute; top: 36px; left: 16px; margin: 0; font-size: 10.5px; padding: 2px 8px; }
+.board .track { margin-top: 24px; }
+.board .block { left: 3px; right: 3px; }
+.board .ghost-block { left: 3px; right: 3px; }
+
+/* Day header washes (column stays white, header carries the state) */
+.board .day::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 80px; background: linear-gradient(to bottom, var(--wash, transparent), transparent); pointer-events: none; }
+.board .day::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--strip, transparent); }
+.board .day.st-part { --wash: #FFF4D1; --strip: var(--gold); }
+.board .day.st-short { --wash: #FFE4F7; --strip: var(--pink); }
+.board .day.st-done { --wash: #DDF4E6; --strip: linear-gradient(90deg, #487BFA, #9275FA, #FB6CF5, #FDB601); }
+.board .day.st-future { --wash: transparent; --strip: var(--line); }
+.board .day.today { box-shadow: inset 0 0 0 2px rgba(72,123,250,.35); border-radius: 0; }
+.board .day.today .today-pip { background: var(--blue); color: #fff; }
+.board .day.drop-target { background: #F3F6FF !important; }
+.board .day .track { background: repeating-linear-gradient(to bottom, transparent 0, transparent 63px, rgba(38,38,38,.06) 63px, rgba(38,38,38,.06) 64px); }
+.board .hour-line { border-top-color: transparent; }
+.board .half-line { border-top-color: rgba(38,38,38,.045); }
+.board .edge-line { left: 0; right: 0; }
+
+/* Shared clock */
+.gutter { position: relative; border-right: 0; }
+.gutter-head { height: 56px; }
+.gutter .track { margin-top: 24px; }
+.gutter-label { position: absolute; right: 8px; top: -7px; font-size: 10px; font-weight: 600; color: var(--muted-2); font-variant-numeric: tabular-nums; }
+.gutter-label.edge { color: var(--text-2); font-weight: 700; }
+
+/* Right rail */
+.week-right .dark { border-radius: 20px; }
+.week-right .panel { border-radius: 20px; }
+
+/* Page top */
+.week-nav-btn { font-size: 15px; }

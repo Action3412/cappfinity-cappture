@@ -8,7 +8,7 @@ import Ring from '../components/Ring.jsx'
 import { ChevronL, ChevronR, Repeat, Search, Plus, Pencil, Calendar, Check, Info } from '../components/Icons.jsx'
 import Hint from '../components/Hint.jsx'
 import WeekPicker from '../components/WeekPicker.jsx'
-import { DayColumn, EntryPopover, startOf, boardTargetAt, showGhost } from '../components/DayBoard.jsx'
+import { DayColumn, EntryPopover, TimeGutter, dayRange, startOf, boardTargetAt, showGhost } from '../components/DayBoard.jsx'
 
 const DEFAULT_CHUNKS = [
   { label: '30m', hours: 0.5 }, { label: '1h', hours: 1 }, { label: '2h', hours: 2 },
@@ -237,6 +237,7 @@ export default function MyWeek() {
   const t = today()
   const isCurrentWeek = ws === weekStart(t)
   const editingEntry = editing ? entries.find((x) => x.id === editing.id) : null
+  const weekRange = dayRange(entries, dayStart, dayEnd)
 
   return (
     <div className="page">
@@ -265,7 +266,7 @@ export default function MyWeek() {
 
       <div className="week-layout">
         {/* Projects */}
-        <aside className="week-side col" style={{ gap: 12 }}>
+        <aside className="week-side panel side-panel">
           <div className="row between"><span className="row" style={{ gap: 6 }}><h2>My projects</h2><Hint title="My projects" text="Every live project you can log time to, grouped by client. Mine shows only projects you've been put on, Recent shows ones you've logged against before, and the dropdown narrows to one client. Click a client name to fold its projects away. Can't see a project? Ask an admin to add it." /></span><span className="tiny muted">Drag onto a day</span></div>
           <label className="search"><Search style={{ color: 'var(--muted)' }} /><span className="sr">Search projects</span>
             <input type="search" placeholder="Search client or project…" value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -283,6 +284,7 @@ export default function MyWeek() {
               </select>
             )}
           </div>
+          <div className="proj-list">
           {!loading && filtering && visibleProjects.length === 0 && <div className="note info">Nothing matches. <button className="btn sm ghost" style={{ height: 24 }} onClick={() => { setQuery(''); setQuick('all'); setClientFilter('all') }}>Clear filters</button></div>}
           {clientGroups.map((g) => (
             <div className="col" style={{ gap: 6 }} key={g.id}>
@@ -316,13 +318,15 @@ export default function MyWeek() {
             </div>
           ))}
           {!loading && projects.length === 0 && <div className="note info">No projects yet. An admin adds them under Admin, Client projects.</div>}
+          </div>
         </aside>
 
         {/* Week board */}
         <main className="week-main">
-          <div className="days">
+          <div className="board">
+            <TimeGutter from={weekRange[0]} to={weekRange[1]} dayStart={dayStart} dayEnd={dayEnd} />
             {days.map((d) => (
-              <DayColumn key={d} date={d} entries={entries.filter((e) => e.entry_date === d)} dayHours={dayHours} dayStart={dayStart} dayEnd={dayEnd} projById={projById} wtById={wtById}
+              <DayColumn key={d} date={d} entries={entries.filter((e) => e.entry_date === d)} dayHours={dayHours} dayStart={dayStart} dayEnd={dayEnd} range={weekRange} projById={projById} wtById={wtById}
                 isToday={d === t} isFirst={d === days[0]} editingId={editing?.id}
                 onOpen={(e, el) => setEditing((ed) => (ed?.id === e.id ? null : { id: e.id, anchor: el }))}
                 onResize={(e, h, startT) => commit(e, { hours: h, start_time: hoursToTime(startT) })}
