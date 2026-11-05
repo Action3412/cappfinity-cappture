@@ -1,0 +1,3 @@
+-- See apply log: indexes for FKs, tighter profiles/allocations read policies, (select auth.uid()) in policies,
+-- drop v_week_totals and my_team_id, admin lockout trigger, server-side aggregates
+-- (my_project_totals, work_type_usage, project_totals), atomic split_entry, presence-safe set_updated_at.

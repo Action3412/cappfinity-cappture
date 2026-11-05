@@ -15,10 +15,10 @@ export default function Login() {
     setBusy(true); setErr('')
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: { emailRedirectTo: window.location.origin },
+      options: { emailRedirectTo: window.location.origin, shouldCreateUser: false },
     })
     setBusy(false)
-    if (error) setErr(error.message); else setSent(true)
+    if (error) setErr(/signups not allowed|not found/i.test(error.message) ? 'No account for that email yet. Ask an admin to set you up.' : error.message); else setSent(true)
   }
 
   async function signInPassword(e) {

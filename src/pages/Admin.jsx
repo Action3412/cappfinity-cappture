@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth.jsx'
 import { supabase } from '../lib/supabase.js'
-import { fmtHours, timeAgo, fmtDateTime } from '../lib/time.js'
+import { fmtHours, timeAgo, fmtDateTime, weekStart, addDays, today } from '../lib/time.js'
 import { initials } from '../components/Shell.jsx'
 import { X } from '../components/Icons.jsx'
 import Hint from '../components/Hint.jsx'
@@ -313,11 +313,11 @@ function WorkTypes() {
   async function load() {
     const [t, e, s] = await Promise.all([
       supabase.from('work_types').select('*').order('sort_order').order('name'),
-      supabase.from('time_entries').select('work_type_id, hours'),
+      supabase.rpc('work_type_usage'),
       supabase.from('settings').select('value').eq('key', 'duration_chunks').maybeSingle(),
     ])
     setTypes(t.data || []); setChunks(Array.isArray(s.data?.value) ? s.data.value : [])
-    const u = {}; (e.data || []).forEach((r) => { u[r.work_type_id] = (u[r.work_type_id] || 0) + Number(r.hours) }); setUsage(u)
+    const u = {}; (e.data || []).forEach((r) => { u[r.work_type_id] = Number(r.hours) }); setUsage(u)
   }
   useEffect(() => { load() }, [])
 
@@ -535,7 +535,7 @@ function People() {
     </>
   )
 }
-function lastWeekStart() { const d = new Date(); const dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dow - 7); return d.toISOString().slice(0, 10) }
+function lastWeekStart() { return addDays(weekStart(today()), -7) }
 
 /* ------------------------------------------------------------------ Settings */
 function Settings() {

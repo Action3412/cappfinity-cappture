@@ -22,12 +22,12 @@ export async function fetchMyAllocations(uid) {
   return data || []
 }
 
-export async function fetchMyProjectTotals(uid) {
-  // Own hours per project, all time (members can only read their own rows anyway)
-  const { data, error } = await supabase.from('time_entries').select('project_id, hours').eq('profile_id', uid)
+export async function fetchMyProjectTotals() {
+  // Own hours per project, all time, summed on the server
+  const { data, error } = await supabase.rpc('my_project_totals')
   if (error) throw error
   const m = {}
-  ;(data || []).forEach((r) => { m[r.project_id] = (m[r.project_id] || 0) + Number(r.hours) })
+  ;(data || []).forEach((r) => { m[r.project_id] = Number(r.hours) })
   return m
 }
 

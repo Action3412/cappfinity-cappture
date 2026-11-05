@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../lib/auth.jsx'
 import { supabase } from '../lib/supabase.js'
-import { today, weekStart, addDays, monthRange, quarterRange, fmtHours, longDate } from '../lib/time.js'
+import { today, weekStart, addDays, monthRange, quarterRange, fmtHours, longDate, shortDate, dayName } from '../lib/time.js'
 import { downloadCSV } from '../lib/data.js'
 import { initials } from '../components/Shell.jsx'
 import { ChevronR, Download } from '../components/Icons.jsx'
 import Hint from '../components/Hint.jsx'
 import { WeeklyColumns, HBars, Donut, PersonWeekGrid, CAT } from '../components/Charts.jsx'
-import { shortDate, dayName } from '../lib/time.js'
 
 const AVATARS = ['#FDE9A8', '#D8CFFE', '#FED3FB', '#C9D6FD', '#DDEFE5', '#F6D5C9']
 const av = (n = '') => AVATARS[[...n].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATARS.length]
@@ -48,12 +47,14 @@ export default function Reports() {
     setLoading(true)
     Promise.all([
       supabase.from('v_entries').select('*').gte('entry_date', from).lte('entry_date', to).order('entry_date'),
-      supabase.from('v_project_totals').select('*'),
+      supabase.rpc('project_totals'),
       supabase.rpc('week_shortfalls', { p_week_start: lastWeek }),
-    ]).then(([e, p, s]) => {
+      supabase.from('projects').select('id, budget_hours'),
+    ]).then(([e, p, s, pr]) => {
       if (dead) return
       setRows((e.data || []).map((r) => ({ ...r, hours: Number(r.hours) })))
-      setProjectTotals(p.data || [])
+      const budgets = Object.fromEntries((pr.data || []).map((x) => [x.id, Number(x.budget_hours)]))
+      setProjectTotals((p.data || []).map((r) => ({ ...r, budget_hours: budgets[r.project_id] || 0 })))
       setShortfalls(s.data || [])
       setLoading(false)
     })

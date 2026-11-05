@@ -12,7 +12,7 @@ export default function App() {
 
   if (session === undefined) return <div className="center">Loading…</div>
   if (!session) return <Login />
-  if (profile === null) return <div className="center">Setting up your account…</div>
+  if (profile === null) return <div className="center col" style={{ gap: 10 }}>Setting up your account…<button className="btn sm" onClick={() => window.location.reload()}>Taking too long? Reload</button></div>
   if (!profile.active) return <Pending />
 
   return (

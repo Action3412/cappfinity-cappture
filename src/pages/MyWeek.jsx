@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth.jsx'
 import { supabase } from '../lib/supabase.js'
-import { weekStart, weekDays, addDays, today, dayName, shortDate, weekLabel, fmtHours, timeToHours, hoursToTime } from '../lib/time.js'
+import { weekStart, weekDays, addDays, today, toISODate, dayName, shortDate, weekLabel, fmtHours, timeToHours, hoursToTime } from '../lib/time.js'
 import { fetchProjects, fetchWorkTypes, fetchMyAllocations, fetchMyProjectTotals, fetchWeekEntries, fetchPendingSuggestions, insertEntry, updateEntry, deleteEntry } from '../lib/data.js'
 import Ring from '../components/Ring.jsx'
 import { ChevronL, ChevronR, Repeat, Search, Plus, Pencil, Calendar, Check, Info } from '../components/Icons.jsx'
@@ -46,13 +46,16 @@ export default function MyWeek() {
 
   const flash = (m) => { setToast(m); setTimeout(() => setToast(''), 2200) }
 
+  const loadSeq = useRef(0)
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current
     try {
       setErr('')
       const [p, w, a, t, e, s] = await Promise.all([
-        fetchProjects(), fetchWorkTypes(), fetchMyAllocations(user.id), fetchMyProjectTotals(user.id),
+        fetchProjects(), fetchWorkTypes(), fetchMyAllocations(user.id), fetchMyProjectTotals(),
         fetchWeekEntries(user.id, days[0], days[4]), fetchPendingSuggestions(user.id),
       ])
+      if (seq !== loadSeq.current) return // a newer week was requested while this one loaded
       setProjects(p); setWorkTypes(w); setTotals(t); setSuggestions(s)
       const am = {}; a.forEach((r) => { am[r.project_id] = r.hours === null ? true : Number(r.hours) }); setAllocs(am)
       setEntries(e.map((x) => ({ ...x, hours: Number(x.hours) })))
@@ -105,7 +108,7 @@ export default function MyWeek() {
   // ---- entries
   const weekTotal = entries.reduce((a, e) => a + (e.hours || 0), 0)
   const billable = entries.reduce((a, e) => a + ((projById[e.project_id]?.billable) ? e.hours || 0 : 0), 0)
-  const remaining = Math.max(0, weeklyTarget - weekTotal)
+  const remaining = Math.max(0, Math.round((weeklyTarget - weekTotal) * 60) / 60)
 
   // First gap of at least `len` hours on a day, from `fromT` onwards; else straight after the last block.
   function nextFree(date, fromT, len = 1, ignoreId = null) {
@@ -146,10 +149,10 @@ export default function MyWeek() {
 
   // Optimistic update, then persist. Roll back if the save fails.
   async function commit(e, fields) {
-    const before = { ...e }
-    patch(e.id, fields)
+    let before = null
+    setEntries((es) => es.map((x) => { if (x.id !== e.id) return x; before = { ...x }; return { ...x, ...fields } }))
     try { await updateEntry(e.id, fields); refreshTotals() }
-    catch (ex) { patch(e.id, before); flash(ex.message) }
+    catch (ex) { if (before) setEntries((es) => es.map((x) => (x.id === e.id ? before : x))); flash(ex.message) }
   }
   // Move or copy a block to a day at a clock time.
   async function moveEntry(e, date, startT, copy = false) {
@@ -166,24 +169,18 @@ export default function MyWeek() {
   }
   // Cut a block in two, back to back. The second half gets no work type yet and opens for editing.
   async function splitEntry(e) {
-    const half = Math.max(0.25, Math.round((e.hours / 2) * 4) / 4)
-    const rest = Math.round((e.hours - half) * 4) / 4
-    if (rest < 0.25) { flash('Too short to split'); return }
-    const start = startOf(e, dayStart)
-    try {
-      await commit(e, { hours: half })
-      const row = await insertEntry({ profile_id: user.id, project_id: e.project_id, work_type_id: null, entry_date: e.entry_date, hours: rest, note: null, source: 'manual', start_time: hoursToTime(start + half) })
-      const n = { ...row, hours: Number(row.hours) }
-      setEntries((es) => [...es, n])
-      setTimeout(() => setEditing({ id: n.id, anchor: document.querySelector(`[data-entry="${n.id}"]`) }), 30)
-    } catch (ex) { flash(ex.message) }
+    const { data: newId, error } = await supabase.rpc('split_entry', { p_id: e.id })
+    if (error) { flash(error.message); return }
+    const fresh = await fetchWeekEntries(user.id, days[0], days[4])
+    setEntries(fresh.map((x) => ({ ...x, hours: Number(x.hours) })))
+    setTimeout(() => setEditing({ id: newId, anchor: document.querySelector(`[data-entry="${newId}"]`) }), 30)
   }
   async function remove(e) {
     setEditing(null)
     setEntries((es) => es.filter((x) => x.id !== e.id))
     try { await deleteEntry(e.id); refreshTotals() } catch (ex) { flash(ex.message); load() }
   }
-  async function refreshTotals() { try { setTotals(await fetchMyProjectTotals(user.id)) } catch {} }
+  async function refreshTotals() { try { setTotals(await fetchMyProjectTotals()) } catch {} }
 
   async function repeatLastWeek() {
     const { data, error } = await supabase.rpc('repeat_last_week', { p_week_start: ws })
@@ -194,7 +191,7 @@ export default function MyWeek() {
 
   async function acceptSuggestion(s) {
     try {
-      await insertEntry({ profile_id: user.id, project_id: s.matched_project_id, work_type_id: workTypes.find((w) => /meeting/i.test(w.name))?.id ?? null, entry_date: s.starts_at.slice(0, 10), hours: Number(s.hours), note: s.title, source: 'calendar', start_time: new Date(s.starts_at).toTimeString().slice(0, 5) })
+      await insertEntry({ profile_id: user.id, project_id: s.matched_project_id, work_type_id: workTypes.find((w) => /meeting/i.test(w.name))?.id ?? null, entry_date: toISODate(new Date(s.starts_at)), hours: Number(s.hours), note: s.title, source: 'calendar', start_time: new Date(s.starts_at).toTimeString().slice(0, 5) })
       await supabase.from('calendar_suggestions').update({ status: 'accepted' }).eq('id', s.id)
       load()
     } catch (ex) { flash(ex.message) }
@@ -216,8 +213,10 @@ export default function MyWeek() {
         if (!g.moved) {
           g.moved = true; document.body.classList.add('dragging')
           g.chip = document.createElement('div'); g.chip.className = 'drag-chip'
-          g.chip.innerHTML = `<span class="swatch" style="background:${p.colour}"></span><b>${p.name}</b><span class="tiny muted">1h</span>`
-          document.body.appendChild(g.chip)
+          const sw = document.createElement('span'); sw.className = 'swatch'; sw.style.background = p.colour
+          const nm = document.createElement('b'); nm.textContent = p.name
+          const hr = document.createElement('span'); hr.className = 'tiny muted'; hr.textContent = '1h'
+          g.chip.append(sw, nm, hr); document.body.appendChild(g.chip)
         }
         g.chip.style.left = `${e2.clientX + 14}px`; g.chip.style.top = `${e2.clientY + 10}px`
         g.target = boardTargetAt(e2.clientX, e2.clientY)
@@ -297,7 +296,7 @@ export default function MyWeek() {
                 const pct = alloc ? Math.min(100, Math.round((used / alloc) * 100)) : 0
                 const overB = alloc && used > alloc
                 return (
-                  <div key={p.id} className="proj" onPointerDown={projDown(p)} title={`Drag onto a day at the time you started, or click to add to ${dayName(quickAddDate)}`}>
+                  <div key={p.id} className="proj" role="button" tabIndex={0} onPointerDown={projDown(p)} onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); addEntry(p.id, quickAddDate, null) } }} title={`Drag onto a day at the time you started, or click to add to ${dayName(quickAddDate)}`}>
                     <div className="row" style={{ gap: 10 }}>
                       <span className="swatch" style={{ background: p.colour }} />
                       <div className="col" style={{ gap: 0, minWidth: 0, flex: 1 }}>

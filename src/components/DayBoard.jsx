@@ -165,6 +165,7 @@ function EntryBlock({ e, top, lane, project, workType, editing, onOpen, onResize
     if (ev.button !== undefined && ev.button !== 0) return
     ev.stopPropagation(); ev.preventDefault()
     const r = ref.current.getBoundingClientRect()
+    try { ev.currentTarget.setPointerCapture?.(ev.pointerId) } catch {}
     gesture.current = { mode, startX: ev.clientX, startY: ev.clientY, startH: e.hours, startT: startOf(e), moved: false, target: null, copy: ev.altKey, rect: { x: r.left, y: r.top, w: r.width }, grabY: ev.clientY - r.top }
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up)
   }
@@ -248,12 +249,19 @@ export function EntryPopover({ e, anchor, project, workTypes, chunks, days, onCh
 
   useLayoutEffect(() => {
     if (!anchor) return
-    const r = anchor.getBoundingClientRect(), w = 320, pad = 12
-    const side = r.right + pad + w < window.innerWidth ? 'right' : 'left'
-    const left = side === 'right' ? r.right + pad : Math.max(8, r.left - pad - w)
-    const top = Math.min(Math.max(8, r.top), window.innerHeight - 8 - (ref.current?.offsetHeight || 440))
-    setPos({ top, left, side })
-  }, [anchor])
+    const place = () => {
+      const r = anchor.getBoundingClientRect(), w = 320, pad = 12
+      const side = r.right + pad + w < window.innerWidth ? 'right' : 'left'
+      const left = side === 'right' ? r.right + pad : Math.max(8, r.left - pad - w)
+      const top = Math.min(Math.max(8, r.top), window.innerHeight - 8 - (ref.current?.offsetHeight || 440))
+      setPos({ top, left, side })
+    }
+    place()
+    const t = setTimeout(place, 0)
+    window.addEventListener('resize', place)
+    return () => { clearTimeout(t); window.removeEventListener('resize', place) }
+  }, [anchor, e.hours, e.start_time, e.entry_date])
+  useEffect(() => { ref.current?.querySelector('button.pill')?.focus({ preventScroll: true }) }, [e.id])
   useEffect(() => {
     const h = (ev) => { if (ref.current && !ref.current.contains(ev.target) && !anchor?.contains(ev.target)) onClose() }
     const k = (ev) => { if (ev.key === 'Escape') onClose() }
@@ -262,11 +270,12 @@ export function EntryPopover({ e, anchor, project, workTypes, chunks, days, onCh
   }, [onClose, anchor])
   useEffect(() => { setNote(e.note || ''); if (isChunk) { setText(''); setBad(false) } }, [e.id, e.note, e.hours, isChunk])
 
-  function commitText(v) {
+  function commitText(v, save = false) {
     setText(v); if (!v.trim()) { setBad(false); return }
     const h = parseDuration(v)
     if (h === null || h <= 0 || h > 24) { setBad(true); return }
-    setBad(false); onChange({ hours: h })
+    setBad(false)
+    if (save && h !== e.hours) onChange({ hours: h })
   }
   function saveNote() { if ((note || '') !== (e.note || '')) onChange({ note: note.trim() || null }) }
 
@@ -291,7 +300,7 @@ export function EntryPopover({ e, anchor, project, workTypes, chunks, days, onCh
         <span className="label">How long</span>
         <div className="row wrap" style={{ gap: 6 }}>
           {chunks.map((c) => <button key={c.label} type="button" className={`pill ${Number(c.hours) === e.hours ? 'on' : ''}`} onClick={() => onChange({ hours: Number(c.hours) })}>{c.label}</button>)}
-          <input type="text" inputMode="decimal" aria-label="Other duration" placeholder="e.g. 3h 20m" className="input" value={text} onChange={(ev) => commitText(ev.target.value)}
+          <input type="text" inputMode="decimal" aria-label="Other duration" placeholder="e.g. 3h 20m" className="input" value={text} onChange={(ev) => commitText(ev.target.value)} onBlur={(ev) => commitText(ev.target.value, true)} onKeyDown={(ev) => { if (ev.key === 'Enter') { ev.preventDefault(); commitText(ev.currentTarget.value, true) } }}
             style={{ width: 116, height: 30, padding: '0 10px', borderRadius: 999, borderColor: bad ? 'var(--bad)' : !isChunk ? 'var(--charcoal)' : undefined }} />
         </div>
         {bad && <span className="tiny" style={{ color: 'var(--bad)' }}>Try 3h 20m or 3:20</span>}
