@@ -459,3 +459,4 @@ h1 + .hint { margin-left: 2px; }
 .board .day > .row.between { padding-top: 12px; }
 .board .day-status { top: 38px; }
 .board .day::before { height: 72px; opacity: .9; }
+.board .day > .day-status { position: absolute; top: 40px; left: 16px; z-index: 2; }
