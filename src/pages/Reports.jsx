@@ -332,9 +332,9 @@ export default function Reports() {
       <div className="row wrap" style={{ gap: 18, alignItems: 'flex-start' }}>
         <section className="panel" style={{ flex: '999 1 600px', minWidth: 0, overflow: 'hidden' }}>
           <div className="panel-h"><h2>By client and project<Hint title="By client and project" text="Grouped by client, then project. Click a client to open or close it, click a project to see each person's hours split by work type. Search finds a project or code; the status filter picks out the ones over or nearly out of budget." /></h2>
-            <div className="row wrap" style={{ gap: 8 }}>
-              <input className="input" style={{ height: 34, width: 200 }} placeholder="Find a project or code…" value={pq} onChange={(e) => setPq(e.target.value)} aria-label="Find a project" />
-              <select className="select" style={{ height: 34 }} value={statusF} onChange={(e) => setStatusF(e.target.value)} aria-label="Status"><option value="all">Any status</option><option>On track</option><option>Nearly out</option><option>Over</option><option>Unbudgeted</option></select>
+            <div className="row wrap" style={{ gap: 8, flex: 'none' }}>
+              <input className="input" style={{ height: 34, width: 200, flex: 'none' }} placeholder="Find a project or code…" value={pq} onChange={(e) => setPq(e.target.value)} aria-label="Find a project" />
+              <select className="select" style={{ height: 34, width: 140, flex: 'none' }} value={statusF} onChange={(e) => setStatusF(e.target.value)} aria-label="Status"><option value="all">Any status</option><option>On track</option><option>Nearly out</option><option>Over</option><option>Unbudgeted</option></select>
               {isAdmin && <span className="row" style={{ gap: 4 }}><button className="btn sm" onClick={() => setShowRates((s) => !s)}>{showRates ? 'Hide' : 'Show'} rates</button><Hint align="right" title="Rates" text="Adds a rate column to the people breakdown so you can see cost or value against hours. Admins only. Rates aren't set up yet, so it shows 'not set' for now." /></span>}
             </div>
           </div>
